@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and personalization data.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID." },
+        "name": { "type": "string", "description": "User's display name." },
+        "age": { "type": "number", "description": "User's age." },
+        "height": { "type": "number", "description": "User's height in cm." },
+        "weight": { "type": "number", "description": "User's weight in kg." },
+        "personality": { "type": "string", "description": "User's personality type." },
+        "goals": { "type": "array", "items": { "type": "string" }, "description": "User's goals." },
+        "xp": { "type": "number", "description": "Total XP earned." },
+        "level": { "type": "number", "description": "Current level." },
+        "streak": { "type": "number", "description": "Current day streak." },
+        "lifeScore": { "type": "number", "description": "Overall life score (0-100)." },
+        "createdAt": { "type": "timestamp", "description": "When the profile was created." },
+        "updatedAt": { "type": "timestamp", "description": "When the profile was last updated." }
+      },
+      "required": ["uid", "name", "xp", "level", "streak", "lifeScore", "createdAt"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "A habit to track.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The owner's user ID." },
+        "title": { "type": "string", "description": "Habit title." },
+        "streak": { "type": "number", "description": "Current streak for this habit." },
+        "lastCompleted": { "type": "timestamp", "description": "When it was last completed." },
+        "isTimerBased": { "type": "boolean", "description": "Whether it requires a timer." },
+        "durationMins": { "type": "number", "description": "Duration in minutes if timer based." },
+        "icon": { "type": "string", "description": "Icon name." },
+        "color": { "type": "string", "description": "Tailwind text color class." },
+        "bg": { "type": "string", "description": "Tailwind bg color class." },
+        "createdAt": { "type": "timestamp", "description": "When the habit was created." }
+      },
+      "required": ["uid", "title", "streak", "isTimerBased", "createdAt"]
+    },
+    "GameSession": {
+      "title": "GameSession",
+      "description": "A record of a played brain game.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The owner's user ID." },
+        "gameId": { "type": "string", "description": "The ID of the game played." },
+        "category": { "type": "string", "description": "Category of the game (e.g., Memory, Focus)." },
+        "score": { "type": "number", "description": "Score achieved." },
+        "xpEarned": { "type": "number", "description": "XP earned from this session." },
+        "playedAt": { "type": "timestamp", "description": "When the game was played." }
+      },
+      "required": ["uid", "gameId", "category", "score", "xpEarned", "playedAt"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "A scheduled reminder for a task.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The owner's user ID." },
+        "title": { "type": "string", "description": "Reminder title." },
+        "time": { "type": "timestamp", "description": "Time of the reminder." },
+        "days": { "type": "array", "items": { "type": "number" }, "description": "Days of the week (0-6)." },
+        "enabled": { "type": "boolean", "description": "Whether the reminder is active." },
+        "lastNotified": { "type": "string", "description": "Last date notified (yyyy-MM-dd)." },
+        "createdAt": { "type": "timestamp", "description": "When the reminder was created." }
+      },
+      "required": ["uid", "title", "time", "enabled", "createdAt"]
+    },
+    "Prompt": {
+      "title": "Prompt",
+      "description": "An AI-generated prompt or suggestion for the user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The owner's user ID." },
+        "text": { "type": "string", "description": "The content of the prompt." },
+        "type": { "type": "string", "description": "Type of prompt (e.g., coach, game, habit)." },
+        "createdAt": { "type": "timestamp", "description": "When the prompt was created." }
+      },
+      "required": ["uid", "text", "type", "createdAt"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "A chat conversation session.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The owner's user ID." },
+        "title": { "type": "string", "description": "Title of the chat." },
+        "lastMessage": { "type": "string", "description": "The last message in the chat." },
+        "updatedAt": { "type": "timestamp", "description": "When the chat was last updated." },
+        "createdAt": { "type": "timestamp", "description": "When the chat was created." }
+      },
+      "required": ["uid", "title", "updatedAt", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A single message in a chat session.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "description": "The role of the sender (user or model)." },
+        "text": { "type": "string", "description": "The message content." },
+        "createdAt": { "type": "timestamp", "description": "When the message was sent." }
+      },
+      "required": ["role", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles."
+    },
+    "/users/{userId}/habits/{habitId}": {
+      "schema": { "$ref": "#/entities/Habit" },
+      "description": "User's habits."
+    },
+    "/users/{userId}/gameSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/GameSession" },
+      "description": "User's game play history."
+    },
+    "/users/{userId}/reminders/{reminderId}": {
+      "schema": { "$ref": "#/entities/Reminder" },
+      "description": "User's scheduled reminders."
+    },
+    "/users/{userId}/prompts/{promptId}": {
+      "schema": { "$ref": "#/entities/Prompt" },
+      "description": "User's AI-generated prompts."
+    },
+    "/users/{userId}/chatSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "User's chat sessions."
+    },
+    "/users/{userId}/chatSessions/{sessionId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages within a chat session."
+    }
+  }
+}

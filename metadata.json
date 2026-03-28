@@ -1,0 +1,5 @@
+{
+  "name": "NEURIX - AI Life Engine",
+  "description": "Transform Your Life with AI. A comprehensive AI coach, habit tracker, and brain training app.",
+  "requestFramePermissions": ["microphone"]
+}

@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer utilities {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 20px;
+  }
+}
+
+.weather-report h3 {
+  @apply text-lg font-bold text-gray-900 mt-6 mb-3;
+}
+
+.weather-report p {
+  @apply mb-3 text-sm text-gray-700 leading-relaxed;
+}
+
+.weather-report ul {
+  @apply list-disc pl-5 mb-4 space-y-2;
+}
+
+.weather-report li {
+  @apply text-sm text-gray-700;
+}
+
+.weather-report strong {
+  @apply font-bold text-gray-900;
+}
+
+.weather-report table {
+  @apply w-full border-collapse my-6 rounded-2xl overflow-hidden shadow-sm border border-gray-100;
+}
+
+.weather-report th {
+  @apply bg-orange-50 text-orange-900 text-left p-3 text-xs font-bold uppercase tracking-wider;
+}
+
+.weather-report td {
+  @apply p-3 text-sm text-gray-700 border-t border-gray-50;
+}
+
+.weather-report tr:nth-child(even) {
+  @apply bg-gray-50/50;
+}
