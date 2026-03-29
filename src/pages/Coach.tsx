@@ -18,7 +18,7 @@ export default function Coach() {
 
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<{role: string, text: string, isError?: boolean}[]>([]);
+  const [messages, setMessages] = useState<{id: number, role: string, text: string, isError?: boolean, userMsg?: string}[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [liveText, setLiveText] = useState('User Experience (UX) design is the process of creating products, systems, or services that offer meaningful, efficient, and enjoyable experiences for users.');
@@ -125,7 +125,7 @@ export default function Coach() {
     setShowChat(true);
     const q = query(collection(db, `users/${user.uid}/chatSessions/${sessionId}/messages`), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMessages(snapshot.docs.map(doc => ({ role: doc.data().role, text: doc.data().text })));
+      setMessages(snapshot.docs.map(doc => ({ id: Date.now() + Math.random(), role: doc.data().role, text: doc.data().text })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/chatSessions/${sessionId}/messages`));
 
     return () => unsubscribe();
@@ -197,16 +197,22 @@ export default function Coach() {
     };
 
     // Add empty message for streaming
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }, { role: 'model', text: '' }]);
+    setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: userMsg }, { id: Date.now() + 1, role: 'model', text: '' }]);
 
     try {
       const needsSearch = /weather|news|current|today|now|latest|price|stock/i.test(userMsg);
       
       const stream = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash',
         contents: userMsg,
         config: {
-          systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
+          systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach.
+The current date and time is ${new Date().toLocaleString()}.
+User Profile: ${JSON.stringify(profile)}
+Current Weather: ${weather || 'Unknown'}
+Keep responses concise, motivating, and helpful.
+IMPORTANT: You MUST reply in the language the user is using.
+The current year is 2026.`,
           tools: needsSearch ? [{ googleSearch: {} }] : [],
         }
       });
@@ -251,7 +257,7 @@ export default function Coach() {
         userFriendlyError = `Error: ${errorMsg.slice(0, 100)}...`;
       }
       
-      setMessages(prev => [...prev, { role: 'model', text: userFriendlyError }]);
+      setMessages(prev => [...prev, { id: Date.now(), role: 'model', text: userFriendlyError, isError: true, userMsg: userMsg }]);
     } finally {
       setIsTyping(false);
     }
@@ -477,16 +483,16 @@ export default function Coach() {
 
       {showChat ? (
         <div className="space-y-4">
-          {messages.map((msg, i) => (
+          {messages.map((msg) => (
             <motion.div 
-              key={i} 
+              key={msg.id} 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className={`p-4 rounded-2xl ${msg.role === 'user' ? 'bg-orange-500 text-white ml-auto' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'} max-w-[85%] transition-colors duration-300 ${msg.isError ? 'border border-red-500' : ''}`}
             >
               {msg.text}
               {msg.isError && (
-                <button onClick={() => handleSend(messages[i-1].text)} className="flex items-center gap-1 mt-2 text-xs text-red-500 hover:underline">
+                <button onClick={() => handleSend(msg.userMsg)} className="flex items-center gap-1 mt-2 text-xs text-red-500 hover:underline">
                   <RefreshCw className="w-3 h-3" /> Retry
                 </button>
               )}
