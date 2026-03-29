@@ -58,69 +58,22 @@ export default function Coach() {
 
     try {
       const pos = await getPosition();
-      let weatherData: any = null;
-      let locationName = "your location";
-
-      if (pos) {
-        const { latitude, longitude } = pos.coords;
-        // Fetch actual weather data from Open-Meteo (Free, no key required)
-        const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m&timezone=auto`
-        );
-        if (weatherRes.ok) {
-          weatherData = await weatherRes.json();
-        }
-        
-        // Try to get city name via reverse geocoding (OpenStreetMap Nominatim - Free)
-        try {
-          const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`,
-            { headers: { 'User-Agent': 'NeurixLifeCoach/1.0' } }
-          );
-          if (geoRes.ok) {
-            const geoData = await geoRes.json();
-            locationName = geoData.display_name || locationName;
-          }
-        } catch (e) {
-          console.warn("Reverse geocoding failed", e);
-        }
+      if (!pos) {
+        setWeather('Location access required for weather.');
+        return;
       }
-
-      const callWithRetry = async (fn: () => Promise<any>, retries = 2): Promise<any> => {
-        try {
-          return await fn();
-        } catch (err: any) {
-          if (retries > 0 && (err.message?.includes('503') || err.message?.includes('high demand') || err.message?.includes('quota'))) {
-            await new Promise(r => setTimeout(r, 2000));
-            return callWithRetry(fn, retries - 1);
-          }
-          throw err;
-        }
-      };
-
-      let weatherText = "";
-      if (weatherData) {
-        // Use Gemini to format the raw weather data into a nice report
-        const prompt = `Format this raw weather data into a supportive, 1-sentence summary followed by a detailed report for ${locationName}. 
-        Current Data: ${JSON.stringify(weatherData.current)}
-        Units: ${JSON.stringify(weatherData.current_units)}
-        The current date is ${new Date().toLocaleString()}.`;
-
-        const response = await callWithRetry(() => ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-        }));
-        weatherText = response.text || 'Weather data received but formatting failed.';
-      } else {
-        // Fallback to search if geolocation failed
-        const prompt = `The current date is ${new Date().toLocaleString()}. Provide a detailed weather report for my current location. Start with a 1-sentence summary.`;
-        const response = await callWithRetry(() => ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-          config: { tools: [{ googleSearch: {} }] },
-        }));
-        weatherText = response.text || 'Weather unavailable';
-      }
+      
+      const { latitude, longitude } = pos.coords;
+      const weatherRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`
+      );
+      
+      if (!weatherRes.ok) throw new Error('Failed to fetch weather');
+      const data = await weatherRes.json();
+      const current = data.current;
+      
+      // Simple client-side formatting (much faster than LLM)
+      const weatherText = `It is currently ${current.temperature_2m}°C with a wind speed of ${current.wind_speed_10m} km/h.`;
       
       setWeather(weatherText);
       localStorage.setItem('neurix_weather', weatherText);
@@ -243,43 +196,41 @@ export default function Coach() {
       }
     };
 
+    // Add empty message for streaming
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }, { role: 'model', text: '' }]);
+
     try {
-      let response;
-      // Only use Google Search if the message seems to require it (e.g., news, current events, weather)
       const needsSearch = /weather|news|current|today|now|latest|price|stock/i.test(userMsg);
       
-      try {
-        response = await callWithRetry(() => ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: userMsg,
-          config: {
-            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
-            tools: needsSearch ? [{ googleSearch: {} }] : [],
-          }
-        }));
-      } catch (toolError) {
-        console.warn("Chat with tools failed, trying without tools:", toolError);
-        response = await callWithRetry(() => ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: userMsg,
-          config: {
-            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. Keep responses concise and helpful. Reply in: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
-          }
-        }));
-      }
+      const stream = await ai.models.generateContentStream({
+        model: 'gemini-3-flash-preview',
+        contents: userMsg,
+        config: {
+          systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
+          tools: needsSearch ? [{ googleSearch: {} }] : [],
+        }
+      });
       
-      const modelText = response.text || 'I am here to help.';
+      let fullResponse = "";
+      for await (const chunk of stream) {
+        fullResponse += chunk.text;
+        setMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1].text = fullResponse;
+          return newMessages;
+        });
+      }
       
       // Save model response
       await addDoc(collection(db, `users/${user.uid}/chatSessions/${currentSessionId}/messages`), {
         role: 'model',
-        text: modelText,
+        text: fullResponse,
         createdAt: serverTimestamp()
       });
 
       // Update session last message
       await updateDoc(doc(db, `users/${user.uid}/chatSessions`, currentSessionId), {
-        lastMessage: modelText,
+        lastMessage: fullResponse,
         updatedAt: serverTimestamp()
       });
 
