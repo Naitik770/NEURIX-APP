@@ -51,54 +51,77 @@ export default function Coach() {
         navigator.geolocation.getCurrentPosition(
           (pos) => resolve(pos),
           () => resolve(null),
-          { timeout: 5000 }
+          { timeout: 5000, enableHighAccuracy: true }
         );
       });
     };
 
-    const pos = await getPosition();
-    const locationContext = pos 
-      ? `Latitude: ${pos.coords.latitude}, Longitude: ${pos.coords.longitude}`
-      : "Unknown location (use general global context or ask user)";
-
-    const callWithRetry = async (fn: () => Promise<any>, retries = 2): Promise<any> => {
-      try {
-        return await fn();
-      } catch (err: any) {
-        if (retries > 0 && (err.message?.includes('503') || err.message?.includes('high demand') || err.message?.includes('quota'))) {
-          await new Promise(r => setTimeout(r, 2000));
-          return callWithRetry(fn, retries - 1);
-        }
-        throw err;
-      }
-    };
-
     try {
-      let response;
-      const prompt = `The current date and time is ${new Date().toLocaleString()}. 
-      User Location Context: ${locationContext}.
-      IMPORTANT: The current year is 2026. This is NOT a future date for this context.
-      Provide a detailed weather report for the user's current location. 
-      Include temperatures, conditions, and a summary. 
-      Start with a very short 1-sentence summary first.`;
+      const pos = await getPosition();
+      let weatherData: any = null;
+      let locationName = "your location";
 
-      try {
-        response = await callWithRetry(() => ai.models.generateContent({
+      if (pos) {
+        const { latitude, longitude } = pos.coords;
+        // Fetch actual weather data from Open-Meteo (Free, no key required)
+        const weatherRes = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m&timezone=auto`
+        );
+        if (weatherRes.ok) {
+          weatherData = await weatherRes.json();
+        }
+        
+        // Try to get city name via reverse geocoding (OpenStreetMap Nominatim - Free)
+        try {
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`,
+            { headers: { 'User-Agent': 'NeurixLifeCoach/1.0' } }
+          );
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            locationName = geoData.display_name || locationName;
+          }
+        } catch (e) {
+          console.warn("Reverse geocoding failed", e);
+        }
+      }
+
+      const callWithRetry = async (fn: () => Promise<any>, retries = 2): Promise<any> => {
+        try {
+          return await fn();
+        } catch (err: any) {
+          if (retries > 0 && (err.message?.includes('503') || err.message?.includes('high demand') || err.message?.includes('quota'))) {
+            await new Promise(r => setTimeout(r, 2000));
+            return callWithRetry(fn, retries - 1);
+          }
+          throw err;
+        }
+      };
+
+      let weatherText = "";
+      if (weatherData) {
+        // Use Gemini to format the raw weather data into a nice report
+        const prompt = `Format this raw weather data into a supportive, 1-sentence summary followed by a detailed report for ${locationName}. 
+        Current Data: ${JSON.stringify(weatherData.current)}
+        Units: ${JSON.stringify(weatherData.current_units)}
+        The current date is ${new Date().toLocaleString()}.`;
+
+        const response = await callWithRetry(() => ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-          },
         }));
-      } catch (toolError) {
-        console.warn("Weather fetch with tools failed, trying without tools:", toolError);
-        response = await callWithRetry(() => ai.models.generateContent({
+        weatherText = response.text || 'Weather data received but formatting failed.';
+      } else {
+        // Fallback to search if geolocation failed
+        const prompt = `The current date is ${new Date().toLocaleString()}. Provide a detailed weather report for my current location. Start with a 1-sentence summary.`;
+        const response = await callWithRetry(() => ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: prompt,
+          config: { tools: [{ googleSearch: {} }] },
         }));
+        weatherText = response.text || 'Weather unavailable';
       }
       
-      const weatherText = response.text || 'Weather unavailable';
       setWeather(weatherText);
       localStorage.setItem('neurix_weather', weatherText);
       localStorage.setItem('neurix_weather_time', new Date().getTime().toString());
@@ -222,13 +245,16 @@ export default function Coach() {
 
     try {
       let response;
+      // Only use Google Search if the message seems to require it (e.g., news, current events, weather)
+      const needsSearch = /weather|news|current|today|now|latest|price|stock/i.test(userMsg);
+      
       try {
         response = await callWithRetry(() => ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: userMsg,
           config: {
-            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. Always use Google Search for up-to-date information on current events, news, or real-time data. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
-            tools: [{ googleSearch: {} }],
+            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
+            tools: needsSearch ? [{ googleSearch: {} }] : [],
           }
         }));
       } catch (toolError) {
