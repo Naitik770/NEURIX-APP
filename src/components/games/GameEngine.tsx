@@ -5,6 +5,12 @@ import ColorMatch from './ColorMatch';
 import MemoryMatrix from './MemoryMatrix';
 import SpeedMatch from './SpeedMatch';
 import MathRush from './MathRush';
+import WordScramble from './WordScramble';
+import PatternRecognition from './PatternRecognition';
+import SpatialReasoning from './SpatialReasoning';
+import ReactionTime from './ReactionTime';
+import LogicFlow from './LogicFlow';
+import CognitiveLoadChallenge from './CognitiveLoadChallenge';
 import { doc, updateDoc, increment, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../App';
@@ -78,13 +84,25 @@ export default function GameEngine({ game, onClose, onComplete }: any) {
         return <SpeedMatch {...commonProps} />;
       case 'Math Rush':
         return <MathRush {...commonProps} />;
+      case 'Word Scramble':
+        return <WordScramble {...commonProps} />;
+      case 'Pattern Recognition':
+        return <PatternRecognition {...commonProps} />;
+      case 'Spatial Reasoning':
+        return <SpatialReasoning {...commonProps} />;
+      case 'Reaction Time':
+        return <ReactionTime {...commonProps} />;
+      case 'Logic Flow':
+        return <LogicFlow {...commonProps} />;
+      case 'Cognitive Load Challenge':
+        return <CognitiveLoadChallenge {...commonProps} />;
       default:
         return <ColorMatch {...commonProps} />;
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-[#FDFBF7] dark:bg-gray-900 z-50 flex flex-col transition-colors duration-300">
+    <div className="fixed inset-0 bg-[#FDFBF7] dark:bg-gray-900 z-[100] flex flex-col transition-colors duration-300">
       <header className="flex flex-col border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 transition-colors duration-300">
         <div className="flex justify-between items-center p-6">
           <button onClick={onClose} className="w-10 h-10 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -108,7 +126,7 @@ export default function GameEngine({ game, onClose, onComplete }: any) {
         )}
       </header>
 
-      <div className="flex-1 relative overflow-hidden flex items-center justify-center p-6">
+      <div className="flex-1 relative overflow-y-auto flex flex-col p-4 sm:p-6">
         <AnimatePresence mode="wait">
           {gameState === 'intro' && (
             <motion.div
@@ -116,7 +134,7 @@ export default function GameEngine({ game, onClose, onComplete }: any) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="text-center max-w-md w-full bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border border-transparent dark:border-gray-700 transition-colors duration-300"
+              className="m-auto text-center max-w-md w-full bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border border-transparent dark:border-gray-700 transition-colors duration-300"
             >
               <div className={`w-20 h-20 rounded-2xl ${game.bg} dark:opacity-90 ${game.color} flex items-center justify-center mx-auto mb-6 transition-colors duration-300`}>
                 <Play className="w-10 h-10 ml-1" />
@@ -138,7 +156,7 @@ export default function GameEngine({ game, onClose, onComplete }: any) {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.1 }}
-              className="w-full max-w-lg h-full flex flex-col items-center justify-center"
+              className="m-auto w-full max-w-lg flex flex-col items-center justify-center py-4"
             >
               {renderGame()}
             </motion.div>
@@ -149,7 +167,7 @@ export default function GameEngine({ game, onClose, onComplete }: any) {
               key="gameover"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center max-w-md w-full bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border border-transparent dark:border-gray-700 transition-colors duration-300"
+              className="m-auto text-center max-w-md w-full bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border border-transparent dark:border-gray-700 transition-colors duration-300"
             >
               <div className="w-20 h-20 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-500 flex items-center justify-center mx-auto mb-6 transition-colors duration-300">
                 <Trophy className="w-10 h-10" />

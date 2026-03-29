@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../App';
+import { useAuth, getAvatarUrl } from '../App';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, orderBy, limit, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Bell, Search, Mic, Send, User, RotateCcw, CloudSun, X, Activity, Plus, MessageSquare, Thermometer, Wind, Droplets, History, Trash2 } from 'lucide-react';
+import { Bell, Mic, Send, User, RotateCcw, CloudSun, X, Activity, Plus, MessageSquare, Thermometer, Wind, Droplets, History, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
@@ -27,7 +27,19 @@ export default function Coach() {
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const fetchWeather = async () => {
+  const fetchWeather = async (force = false) => {
+    if (!force) {
+      const cachedWeather = localStorage.getItem('neurix_weather');
+      const cachedTime = localStorage.getItem('neurix_weather_time');
+      const now = new Date().getTime();
+      
+      // Cache for 4 hours to be conservative with API usage
+      if (cachedWeather && cachedTime && (now - parseInt(cachedTime)) < 14400000) {
+        setWeather(cachedWeather);
+        return;
+      }
+    }
+
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -36,10 +48,13 @@ export default function Coach() {
           tools: [{ googleSearch: {} }],
         },
       });
-      setWeather(response.text || 'Weather unavailable');
+      const weatherText = response.text || 'Weather unavailable';
+      setWeather(weatherText);
+      localStorage.setItem('neurix_weather', weatherText);
+      localStorage.setItem('neurix_weather_time', new Date().getTime().toString());
     } catch (error) {
       console.error(error);
-      setWeather('Weather unavailable');
+      if (!weather) setWeather('Weather unavailable');
     }
   };
 
@@ -178,25 +193,39 @@ export default function Coach() {
     }
   };
 
+  const [transcription, setTranscription] = useState('');
+  const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const nextAudioTimeRef = useRef(0);
+
   const startLiveSession = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setLiveText('Microphone access is not supported by your browser.');
+      return;
+    }
+
     try {
-      setIsRecording(true);
-      setLiveText('Listening...');
+      setLiveText(t('coach.connecting'));
+      setTranscription('');
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setIsRecording(true); // Only set recording true AFTER permission is granted
       streamRef.current = stream;
       
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
-      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
       
+      // Use a larger buffer size to reduce main thread pressure
+      const processor = audioContextRef.current.createScriptProcessor(8192, 1, 1);
       source.connect(processor);
       processor.connect(audioContextRef.current.destination);
+
+      nextAudioTimeRef.current = audioContextRef.current.currentTime;
 
       const sessionPromise = ai.live.connect({
         model: "gemini-3.1-flash-live-preview",
         callbacks: {
           onopen: () => {
+            setLiveText(t('coach.listening'));
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const pcm16 = new Int16Array(inputData.length);
@@ -206,61 +235,110 @@ export default function Coach() {
               const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
               sessionPromise.then((session) =>
                 session.sendRealtimeInput({
-                  audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+                  audio: { data: base64Data, mimeType: 'audio/pcm;rate=24000' }
                 })
               );
             };
           },
           onmessage: async (message: LiveServerMessage) => {
+            // Handle audio output
             const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
             if (base64Audio && audioContextRef.current) {
+              setIsAiSpeaking(true);
               const binary = atob(base64Audio);
-              const bytes = new Uint8Array(binary.length);
+              const buffer = new Int16Array(binary.length / 2);
+              const view = new DataView(new ArrayBuffer(binary.length));
               for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
+                view.setUint8(i, binary.charCodeAt(i));
               }
-              try {
-                const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer);
-                const sourceNode = audioContextRef.current.createBufferSource();
-                sourceNode.buffer = audioBuffer;
-                sourceNode.connect(audioContextRef.current.destination);
-                sourceNode.start();
-              } catch (e) {
-                console.error("Audio decode error", e);
+              for (let i = 0; i < buffer.length; i++) {
+                buffer[i] = view.getInt16(i * 2, true);
               }
+
+              const audioBuffer = audioContextRef.current.createBuffer(1, buffer.length, 24000);
+              const channelData = audioBuffer.getChannelData(0);
+              for (let i = 0; i < buffer.length; i++) {
+                channelData[i] = buffer[i] / 32768;
+              }
+
+              const sourceNode = audioContextRef.current.createBufferSource();
+              sourceNode.buffer = audioBuffer;
+              sourceNode.connect(audioContextRef.current.destination);
+              
+              const startTime = Math.max(audioContextRef.current.currentTime, nextAudioTimeRef.current);
+              sourceNode.start(startTime);
+              nextAudioTimeRef.current = startTime + audioBuffer.duration;
+              
+              sourceNode.onended = () => {
+                if (audioContextRef.current && audioContextRef.current.currentTime >= nextAudioTimeRef.current - 0.1) {
+                  setIsAiSpeaking(false);
+                }
+              };
             }
+
+            // Handle transcriptions
             if (message.serverContent?.modelTurn?.parts[0]?.text) {
+              setTranscription(prev => prev + message.serverContent?.modelTurn?.parts[0]?.text);
               setLiveText(message.serverContent.modelTurn.parts[0].text);
             }
+
+            if (message.serverContent?.interrupted) {
+              // Stop current playback if interrupted
+              nextAudioTimeRef.current = audioContextRef.current?.currentTime || 0;
+              setIsAiSpeaking(false);
+            }
           },
+          onclose: () => {
+            stopLiveSession();
+          },
+          onerror: (err: any) => {
+            console.error("Live session error:", err);
+            if (err.message?.toLowerCase().includes('permission denied')) {
+              setLiveText('Microphone permission denied. Please check your browser settings.');
+            }
+            stopLiveSession();
+          }
         },
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
           },
-          systemInstruction: `You are NEURIX, a supportive AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise and motivating. Use up-to-date information. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
+          systemInstruction: `You are NEURIX, a supportive AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and conversational. You are speaking directly to the user. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
         },
       });
 
       sessionRef.current = await sessionPromise;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Live session error:", err);
       setIsRecording(false);
-      setLiveText('Failed to connect to voice assistant.');
+      
+      let errorMessage = 'Failed to connect to voice assistant.';
+      if (err.name === 'NotAllowedError' || err.message?.toLowerCase().includes('permission denied')) {
+        errorMessage = 'Microphone permission denied. Please click the lock icon in your browser address bar to allow microphone access.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        errorMessage = 'Microphone is already in use by another application.';
+      }
+      
+      setLiveText(errorMessage);
     }
   };
 
   const stopLiveSession = () => {
     setIsRecording(false);
+    setIsAiSpeaking(false);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
     if (audioContextRef.current) {
       audioContextRef.current.close();
+      audioContextRef.current = null;
     }
     if (sessionRef.current) {
       sessionRef.current.close();
+      sessionRef.current = null;
     }
   };
 
@@ -275,7 +353,7 @@ export default function Coach() {
       <header className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm transition-colors duration-300">
-            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.avatarSeed || profile?.uid}`} alt="Avatar" className="w-full h-full object-cover" />
+            <img src={getAvatarUrl(profile, user)} alt="Avatar" className="w-full h-full object-cover" />
           </div>
           <span className="font-medium text-gray-900 dark:text-white">{profile?.name || 'User'}</span>
         </div>
@@ -285,9 +363,6 @@ export default function Coach() {
             className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <Plus className="w-5 h-5" />
-          </button>
-          <button className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
-            <Search className="w-5 h-5" />
           </button>
         </div>
       </header>
@@ -391,7 +466,7 @@ export default function Coach() {
             </div>
             <div className="flex flex-col gap-2">
               <button 
-                onClick={(e) => { e.stopPropagation(); fetchWeather(); }}
+                onClick={(e) => { e.stopPropagation(); fetchWeather(true); }}
                 className="p-2 rounded-full bg-gray-50 dark:bg-gray-700 text-orange-600 dark:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />
@@ -496,66 +571,149 @@ export default function Coach() {
       <AnimatePresence>
         {isVoiceMode && (
           <motion.div 
-            initial={{ opacity: 0, y: '100%' }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 bg-gradient-to-b from-[#FFEFE5] to-[#FFD6C4] z-50 flex flex-col p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex flex-col overflow-y-auto bg-[#0a0502] custom-scrollbar"
           >
-            <header className="flex justify-between items-center mb-12 pt-6">
-              <button 
-                onClick={() => setIsVoiceMode(false)}
-                className="w-10 h-10 rounded-full bg-white/50 flex items-center justify-center text-gray-800 hover:bg-white/80 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <button className="w-10 h-10 rounded-full bg-white/50 flex items-center justify-center text-gray-800 hover:bg-white/80 transition-colors">
-                <Bell className="w-5 h-5" />
-              </button>
-            </header>
-
-            <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <p className="text-gray-600 font-medium mb-12">{t('coach.goAhead')}</p>
-              
-              {/* Silver Blob Animation */}
+            {/* Atmospheric Background - Optimized for performance */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <motion.div 
                 animate={{ 
-                  scale: isRecording ? [1, 1.1, 0.9, 1.05, 1] : 1,
-                  rotate: isRecording ? [0, 5, -5, 2, 0] : 0,
-                  borderRadius: isRecording ? ["40%", "50%", "30%", "60%", "40%"] : "50%"
+                  scale: [1, 1.1, 1],
+                  opacity: [0.2, 0.3, 0.2]
                 }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="w-48 h-48 bg-gradient-to-br from-gray-200 via-gray-400 to-gray-600 shadow-2xl mb-16"
-                style={{ 
-                  boxShadow: 'inset 20px 20px 40px rgba(255,255,255,0.5), inset -20px -20px 40px rgba(0,0,0,0.2), 0 20px 40px rgba(0,0,0,0.1)' 
-                }}
+                transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute -top-[10%] -left-[10%] w-[120%] h-[120%] bg-[radial-gradient(circle_at_50%_50%,#3a1510_0%,transparent_60%)] blur-[40px] will-change-transform transform-gpu"
               />
-
-              <div className="bg-white/40 backdrop-blur-md rounded-3xl p-6 text-sm text-gray-800 leading-relaxed text-left shadow-lg border border-white/50 max-w-sm">
-                {liveText}
-              </div>
+              <motion.div 
+                animate={{ 
+                  scale: [1.1, 1, 1.1],
+                  opacity: [0.15, 0.25, 0.15]
+                }}
+                transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute -bottom-[10%] -right-[10%] w-[120%] h-[120%] bg-[radial-gradient(circle_at_50%_50%,#ff4e00_0%,transparent_60%)] blur-[40px] will-change-transform transform-gpu"
+              />
             </div>
 
-            <div className="flex justify-center gap-6 pb-8">
-              <button className="w-14 h-14 rounded-full bg-white/50 flex items-center justify-center text-gray-800 hover:bg-white/80 transition-colors shadow-sm">
-                <Activity className="w-6 h-6" />
-              </button>
-              <button 
-                onClick={isRecording ? stopLiveSession : startLiveSession}
-                className={`w-16 h-16 rounded-full flex items-center justify-center text-white shadow-xl transition-transform hover:scale-105 ${isRecording ? 'bg-red-500 shadow-red-500/20' : 'bg-gray-900 shadow-gray-900/20'}`}
-              >
-                <Mic className="w-6 h-6" />
-              </button>
+            <header className="relative z-10 flex justify-between items-center p-8">
               <button 
                 onClick={() => {
                   stopLiveSession();
                   setIsVoiceMode(false);
                 }}
-                className="w-14 h-14 rounded-full bg-white/50 flex items-center justify-center text-gray-800 hover:bg-white/80 transition-colors shadow-sm"
+                className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all"
               >
                 <X className="w-6 h-6" />
               </button>
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold mb-1">NEURIX LIVE</span>
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isRecording ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                  <span className="text-xs text-white/60 font-medium">{isRecording ? t('coach.online') : t('coach.offline')}</span>
+                </div>
+              </div>
+              <button className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all">
+                <Bell className="w-6 h-6" />
+              </button>
+            </header>
+
+            <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 text-center overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+              {/* Organic Blob Animation */}
+              <div className="relative w-48 h-48 md:w-64 md:h-64 mb-8 md:mb-16 flex-shrink-0">
+                <AnimatePresence>
+                  {isAiSpeaking && (
+                    <motion.div 
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1.2, opacity: 0.4 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      transition={{ duration: 1, repeat: Infinity, repeatType: 'reverse' }}
+                      className="absolute inset-0 bg-orange-500/30 rounded-full blur-2xl transform-gpu"
+                    />
+                  )}
+                </AnimatePresence>
+                
+                <motion.div 
+                  animate={{ 
+                    scale: isAiSpeaking ? [1, 1.03, 1] : (isRecording ? [1, 1.01, 1] : 1),
+                    borderRadius: ["40% 60% 70% 30% / 40% 50% 60% 50%", "50% 50% 50% 50% / 50% 50% 50% 50%"]
+                  }}
+                  transition={{ 
+                    duration: isAiSpeaking ? 1.5 : 4, 
+                    repeat: Infinity, 
+                    ease: "easeInOut" 
+                  }}
+                  className="w-full h-full bg-white/10 border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)] flex items-center justify-center will-change-transform transform-gpu"
+                  style={{ 
+                    boxShadow: 'inset 0 0 20px rgba(255,255,255,0.05)'
+                  }}
+                >
+                  <div className="flex gap-1.5 items-center">
+                    {[...Array(5)].map((_, i) => (
+                      <motion.div 
+                        key={i}
+                        animate={{ 
+                          height: isAiSpeaking ? [12, 40, 12] : (isRecording ? [12, 24, 12] : 12)
+                        }}
+                        transition={{ 
+                          duration: 0.6, 
+                          repeat: Infinity, 
+                          delay: i * 0.1,
+                          ease: "easeInOut"
+                        }}
+                        className="w-1 bg-white/80 rounded-full"
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-md w-full"
+              >
+                <p className="text-white/40 text-[10px] uppercase tracking-[0.3em] font-bold mb-4">{isAiSpeaking ? 'NEURIX SPEAKING' : (isRecording ? 'LISTENING' : 'READY')}</p>
+                <div className="max-h-[30vh] overflow-y-auto px-4 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                  <h2 className="text-xl md:text-2xl font-serif text-white leading-tight mb-4">
+                    {liveText}
+                  </h2>
+                </div>
+                {transcription && (
+                  <div className="mt-4 p-4 bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 text-[10px] text-white/40 leading-relaxed text-left max-h-24 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                    {transcription}
+                  </div>
+                )}
+              </motion.div>
             </div>
+
+            <footer className="relative z-10 p-8 pb-12 flex flex-col items-center gap-8">
+              <div className="flex justify-center gap-8">
+                <button className="w-16 h-16 rounded-full bg-white/5 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all">
+                  <Activity className="w-6 h-6" />
+                </button>
+                <button 
+                  onClick={isRecording ? stopLiveSession : startLiveSession}
+                  className={`w-20 h-20 rounded-full flex items-center justify-center text-white shadow-2xl transition-all hover:scale-105 active:scale-95 ${isRecording ? 'bg-white/10 border border-white/20' : 'bg-orange-600 shadow-orange-600/20'}`}
+                >
+                  {isRecording ? (
+                    <div className="w-6 h-6 bg-white rounded-sm" />
+                  ) : (
+                    <Mic className="w-8 h-8" />
+                  )}
+                </button>
+                <button 
+                  onClick={() => {
+                    stopLiveSession();
+                    setIsVoiceMode(false);
+                  }}
+                  className="w-16 h-16 rounded-full bg-white/5 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <p className="text-[10px] text-white/20 uppercase tracking-[0.2em] font-bold">Tap to {isRecording ? 'stop' : 'start'} session</p>
+            </footer>
           </motion.div>
         )}
       </AnimatePresence>

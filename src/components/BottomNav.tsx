@@ -11,7 +11,7 @@ export function BottomNav() {
     { to: '/', icon: Home, label: t('nav.home') },
     { to: '/coach', icon: MessageSquare, label: t('nav.coach') },
     { to: '/games', icon: BrainCircuit, label: t('nav.games') },
-    { to: '/reminders', icon: Bell, label: t('home.reminders') },
+    { to: '/analytics', icon: BarChart2, label: t('nav.analytics') },
     { to: '/profile', icon: User, label: t('nav.profile') },
   ];
 

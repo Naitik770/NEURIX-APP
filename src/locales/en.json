@@ -22,6 +22,7 @@
     "coach": "Coach",
     "games": "Games",
     "analytics": "Analytics",
+    "reminders": "Reminders",
     "profile": "Profile"
   },
   "coach": {
@@ -46,7 +47,10 @@
     "gotIt": "Got it",
     "thinking": "NEURIX is thinking...",
     "listening": "Listening...",
-    "goAhead": "Go Ahead, I am saying..."
+    "goAhead": "Go Ahead, I am saying...",
+    "connecting": "Connecting...",
+    "online": "Online",
+    "offline": "Offline"
   },
   "home": {
     "greeting": "Hi",

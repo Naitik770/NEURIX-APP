@@ -13,6 +13,7 @@ import Home from './pages/Home';
 import Coach from './pages/Coach';
 import Games from './pages/Games';
 import Analytics from './pages/Analytics';
+import DailyRoutine from './pages/DailyRoutine';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Reminders from './pages/Reminders';
@@ -33,6 +34,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({ user: null, loading: true, profile: null, theme: 'light', setTheme: () => {} });
 
 export const useAuth = () => useContext(AuthContext);
+
+export const getAvatarUrl = (profile: any, user?: any) => {
+  const seed = profile?.avatarSeed || user?.uid || 'Aneka';
+  const style = profile?.avatarStyle || 'avataaars';
+  const color = profile?.avatarColor || 'transparent';
+  const backgroundColor = color === 'transparent' ? '' : `&backgroundColor=${color}`;
+  return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}${backgroundColor}`;
+};
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -320,6 +329,7 @@ export default function App() {
             <Route path="/chat-history" element={<ProtectedRoute><Layout><ChatHistory /></Layout></ProtectedRoute>} />
             <Route path="/games" element={<ProtectedRoute><Layout><Games /></Layout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
+            <Route path="/daily-routine" element={<ProtectedRoute><Layout><DailyRoutine /></Layout></ProtectedRoute>} />
             <Route path="/reminders" element={<ProtectedRoute><Layout><Reminders /></Layout></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />

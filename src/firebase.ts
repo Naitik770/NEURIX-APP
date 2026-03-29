@@ -1,16 +1,30 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, User } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getAnalytics, logEvent } from 'firebase/analytics';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 export const auth = getAuth(app);
+let analyticsInstance = null;
+if (typeof window !== 'undefined' && (firebaseConfig as any).measurementId) {
+  try {
+    analyticsInstance = getAnalytics(app);
+  } catch (error) {
+    console.warn("Firebase Analytics failed to initialize:", error);
+  }
+}
+export const analytics = analyticsInstance;
 
 export const signInWithGoogle = async () => {
   const provider = new GoogleAuthProvider();
   try {
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    if (analytics) {
+      logEvent(analytics, 'login', { method: 'google' });
+    }
+    return result;
   } catch (error) {
     console.error("Error signing in with Google", error);
     throw error;

@@ -89,9 +89,6 @@ export default function Settings() {
           <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white rounded-xl px-4 py-3 outline-none transition-colors duration-300">
             <option value="en">English</option>
             <option value="hi">Hindi (हिंदी)</option>
-            <option value="es">Spanish (Español)</option>
-            <option value="fr">French (Français)</option>
-            <option value="de">German (Deutsch)</option>
           </select>
         </div>
 
