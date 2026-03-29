@@ -8,6 +8,7 @@ import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 export default function Coach() {
   const { user, profile } = useAuth();
@@ -28,6 +29,7 @@ export default function Coach() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const fetchWeather = async (force = false) => {
+    if (!ai) return;
     if (!force) {
       const cachedWeather = localStorage.getItem('neurix_weather');
       const cachedTime = localStorage.getItem('neurix_weather_time');
@@ -41,20 +43,37 @@ export default function Coach() {
     }
 
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Today is ${new Date().toLocaleString()}. What is the weather like in my current location? Provide a detailed report including temperatures, conditions, and a summary table if applicable. Start with a very short 1-sentence summary first.`,
-        config: {
-          tools: [{ googleSearch: {} }],
-        },
-      });
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: `Today is ${new Date().toLocaleString()}. What is the weather like in my current location? Provide a detailed report including temperatures, conditions, and a summary table if applicable. Start with a very short 1-sentence summary first.`,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
+        });
+      } catch (toolError) {
+        console.warn("Weather fetch with tools failed, trying without tools:", toolError);
+        response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: `Today is ${new Date().toLocaleString()}. What is the weather like in my current location? Provide a detailed report.`,
+        });
+      }
+      
       const weatherText = response.text || 'Weather unavailable';
       setWeather(weatherText);
       localStorage.setItem('neurix_weather', weatherText);
       localStorage.setItem('neurix_weather_time', new Date().getTime().toString());
-    } catch (error) {
-      console.error(error);
-      if (!weather) setWeather('Weather unavailable');
+    } catch (error: any) {
+      console.error("Weather fetch error:", error);
+      const errorMsg = error.message || String(error);
+      if (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('invalid API key')) {
+        setWeather('Error: Invalid API Key. Please check your Netlify environment variables.');
+      } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
+        setWeather('Error: API Quota exceeded. Please try again later.');
+      } else {
+        if (!weather) setWeather('Weather unavailable. Please check your connection or API key.');
+      }
     }
   };
 
@@ -62,7 +81,9 @@ export default function Coach() {
     fetchWeather();
   }, []);
   
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const apiKey = process.env.GEMINI_API_KEY;
+  const isPlaceholderKey = apiKey === "MY_GEMINI_API_KEY" || apiKey === "undefined" || !apiKey;
+  const ai = !isPlaceholderKey ? new GoogleGenAI({ apiKey: apiKey! }) : null;
   const audioContextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -99,7 +120,7 @@ export default function Coach() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!inputText.trim() || !user) return;
+    if (!inputText.trim() || !user || !ai) return;
     const userMsg = inputText;
     setInputText('');
     
@@ -148,14 +169,26 @@ export default function Coach() {
     setShowChat(true);
 
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: userMsg,
-        config: {
-          systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. Always use Google Search for up-to-date information on current events, news, or real-time data. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
-          tools: [{ googleSearch: {} }],
-        }
-      });
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: userMsg,
+          config: {
+            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. Always use Google Search for up-to-date information on current events, news, or real-time data. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
+            tools: [{ googleSearch: {} }],
+          }
+        });
+      } catch (toolError) {
+        console.warn("Chat with tools failed, trying without tools:", toolError);
+        response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: userMsg,
+          config: {
+            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. Keep responses concise and helpful. Reply in: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
+          }
+        });
+      }
       
       const modelText = response.text || 'I am here to help.';
       
@@ -172,9 +205,22 @@ export default function Coach() {
         updatedAt: serverTimestamp()
       });
 
-    } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { role: 'model', text: 'Sorry, I encountered an error.' }]);
+    } catch (error: any) {
+      console.error("AI Coach error:", error);
+      const errorMsg = error.message || String(error);
+      let userFriendlyError = 'Sorry, I encountered an error.';
+      
+      if (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('invalid API key')) {
+        userFriendlyError = 'Error: Invalid API Key. Please verify your GEMINI_API_KEY in Netlify.';
+      } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
+        userFriendlyError = 'Error: API Quota exceeded. Please try again in a moment.';
+      } else if (errorMsg.includes('safety')) {
+        userFriendlyError = 'I cannot respond to that due to safety guidelines.';
+      } else {
+        userFriendlyError = `Error: ${errorMsg.slice(0, 100)}...`;
+      }
+      
+      setMessages(prev => [...prev, { role: 'model', text: userFriendlyError }]);
     } finally {
       setIsTyping(false);
     }
@@ -198,6 +244,10 @@ export default function Coach() {
   const nextAudioTimeRef = useRef(0);
 
   const startLiveSession = async () => {
+    if (!ai) {
+      toast.error("Gemini API Key is missing. Please check your environment variables.");
+      return;
+    }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setLiveText('Microphone access is not supported by your browser.');
       return;
@@ -347,6 +397,33 @@ export default function Coach() {
       stopLiveSession();
     };
   }, []);
+
+  if (isPlaceholderKey) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen p-6 text-center bg-[#FDFBF7] dark:bg-gray-900">
+        <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mb-6">
+          <Activity className="w-10 h-10" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Gemini API Key Missing or Invalid</h1>
+        <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md">
+          The AI Coach requires a valid Gemini API Key to function. 
+          {apiKey === "MY_GEMINI_API_KEY" ? (
+            <span> You are currently using the placeholder key from <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">.env.example</code>.</span>
+          ) : (
+            <span> Please ensure the <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">GEMINI_API_KEY</code> environment variable is set in your Netlify settings.</span>
+          )}
+        </p>
+        <div className="space-y-4 w-full max-w-xs">
+          <Link to="/" className="block w-full px-8 py-3 bg-orange-500 text-white rounded-2xl font-bold hover:bg-orange-600 transition-colors">
+            Back to Home
+          </Link>
+          <p className="text-[10px] text-gray-400 uppercase tracking-widest">
+            Current Key: <span className="font-mono">{apiKey ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : 'None'}</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 pt-12 min-h-screen bg-[#FDFBF7] dark:bg-gray-900 relative pb-32 text-gray-900 dark:text-white transition-colors duration-300">

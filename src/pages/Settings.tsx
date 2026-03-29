@@ -2,10 +2,20 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ChevronLeft, Save, Moon, Sun, Bell, Globe, User } from 'lucide-react';
+import { ChevronLeft, Save, Moon, Sun, Bell, Globe, User, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+
+// Declare aistudio on window
+declare global {
+  interface Window {
+    aistudio?: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
 
 export default function Settings() {
   const { user, profile, theme, setTheme } = useAuth();
@@ -20,6 +30,17 @@ export default function Settings() {
   });
   const [language, setLanguage] = useState(localStorage.getItem('appLanguage') || 'en');
   const [notifications, setNotifications] = useState(true);
+  const [hasApiKey, setHasApiKey] = useState(false);
+
+  useEffect(() => {
+    const checkApiKey = async () => {
+      if (window.aistudio?.hasSelectedApiKey) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(hasKey);
+      }
+    };
+    checkApiKey();
+  }, []);
 
   useEffect(() => {
     if (profile) {
@@ -54,6 +75,21 @@ export default function Settings() {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('appTheme', newTheme);
+  };
+
+  const handleSelectApiKey = async () => {
+    if (window.aistudio?.openSelectKey) {
+      try {
+        await window.aistudio.openSelectKey();
+        setHasApiKey(true);
+        toast.success("API Key selected successfully!");
+      } catch (error) {
+        console.error("Failed to select API key", error);
+        toast.error("Failed to select API key");
+      }
+    } else {
+      toast.error("API Key selection is not available in this environment.");
+    }
   };
 
   return (
@@ -100,6 +136,16 @@ export default function Settings() {
         <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm flex justify-between items-center transition-colors duration-300">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><Bell className="w-5 h-5" /> {t('settings.notifications')}</h2>
           <button onClick={() => setNotifications(!notifications)} className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${notifications ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 dark:text-white'}`}>{notifications ? t('settings.on') : t('settings.off')}</button>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm flex justify-between items-center transition-colors duration-300">
+          <div className="flex flex-col">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><Key className="w-5 h-5" /> Custom API Key</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">For paid models or higher limits</p>
+          </div>
+          <button onClick={handleSelectApiKey} className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${hasApiKey ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'}`}>
+            {hasApiKey ? 'Key Selected' : 'Select Key'}
+          </button>
         </div>
 
         <button onClick={handleSave} className="w-full bg-orange-500 text-white py-4 rounded-full font-semibold text-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30">
