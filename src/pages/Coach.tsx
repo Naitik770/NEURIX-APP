@@ -35,29 +35,67 @@ export default function Coach() {
       const cachedTime = localStorage.getItem('neurix_weather_time');
       const now = new Date().getTime();
       
-      // Cache for 4 hours to be conservative with API usage
+      // Cache for 4 hours
       if (cachedWeather && cachedTime && (now - parseInt(cachedTime)) < 14400000) {
         setWeather(cachedWeather);
         return;
       }
     }
 
+    const getPosition = (): Promise<GeolocationPosition | null> => {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve(null);
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          () => resolve(null),
+          { timeout: 5000 }
+        );
+      });
+    };
+
+    const pos = await getPosition();
+    const locationContext = pos 
+      ? `Latitude: ${pos.coords.latitude}, Longitude: ${pos.coords.longitude}`
+      : "Unknown location (use general global context or ask user)";
+
+    const callWithRetry = async (fn: () => Promise<any>, retries = 2): Promise<any> => {
+      try {
+        return await fn();
+      } catch (err: any) {
+        if (retries > 0 && (err.message?.includes('503') || err.message?.includes('high demand') || err.message?.includes('quota'))) {
+          await new Promise(r => setTimeout(r, 2000));
+          return callWithRetry(fn, retries - 1);
+        }
+        throw err;
+      }
+    };
+
     try {
       let response;
+      const prompt = `The current date and time is ${new Date().toLocaleString()}. 
+      User Location Context: ${locationContext}.
+      IMPORTANT: The current year is 2026. This is NOT a future date for this context.
+      Provide a detailed weather report for the user's current location. 
+      Include temperatures, conditions, and a summary. 
+      Start with a very short 1-sentence summary first.`;
+
       try {
-        response = await ai.models.generateContent({
+        response = await callWithRetry(() => ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: `Today is ${new Date().toLocaleString()}. What is the weather like in my current location? Provide a detailed report including temperatures, conditions, and a summary table if applicable. Start with a very short 1-sentence summary first.`,
+          contents: prompt,
           config: {
             tools: [{ googleSearch: {} }],
           },
-        });
+        }));
       } catch (toolError) {
         console.warn("Weather fetch with tools failed, trying without tools:", toolError);
-        response = await ai.models.generateContent({
+        response = await callWithRetry(() => ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: `Today is ${new Date().toLocaleString()}. What is the weather like in my current location? Provide a detailed report.`,
-        });
+          contents: prompt,
+        }));
       }
       
       const weatherText = response.text || 'Weather unavailable';
@@ -69,6 +107,8 @@ export default function Coach() {
       const errorMsg = error.message || String(error);
       if (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('invalid API key')) {
         setWeather('Error: Invalid API Key. Please check your Netlify environment variables.');
+      } else if (errorMsg.includes('503') || errorMsg.includes('high demand')) {
+        setWeather('The AI service is currently busy. Please click refresh in a moment.');
       } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
         setWeather('Error: API Quota exceeded. Please try again later.');
       } else {
@@ -168,26 +208,38 @@ export default function Coach() {
     setIsTyping(true);
     setShowChat(true);
 
+    const callWithRetry = async (fn: () => Promise<any>, retries = 2): Promise<any> => {
+      try {
+        return await fn();
+      } catch (err: any) {
+        if (retries > 0 && (err.message?.includes('503') || err.message?.includes('high demand') || err.message?.includes('quota'))) {
+          await new Promise(r => setTimeout(r, 2000));
+          return callWithRetry(fn, retries - 1);
+        }
+        throw err;
+      }
+    };
+
     try {
       let response;
       try {
-        response = await ai.models.generateContent({
+        response = await callWithRetry(() => ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: userMsg,
           config: {
-            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. Always use Google Search for up-to-date information on current events, news, or real-time data. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
+            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and helpful. Always use Google Search for up-to-date information on current events, news, or real-time data. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
             tools: [{ googleSearch: {} }],
           }
-        });
+        }));
       } catch (toolError) {
         console.warn("Chat with tools failed, trying without tools:", toolError);
-        response = await ai.models.generateContent({
+        response = await callWithRetry(() => ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: userMsg,
           config: {
-            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. Keep responses concise and helpful. Reply in: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
+            systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach. Keep responses concise and helpful. Reply in: ${i18n.language === 'hi' ? 'Hindi' : 'English'}. The current year is 2026.`,
           }
-        });
+        }));
       }
       
       const modelText = response.text || 'I am here to help.';
@@ -212,6 +264,8 @@ export default function Coach() {
       
       if (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('invalid API key')) {
         userFriendlyError = 'Error: Invalid API Key. Please verify your GEMINI_API_KEY in Netlify.';
+      } else if (errorMsg.includes('503') || errorMsg.includes('high demand')) {
+        userFriendlyError = 'The AI service is currently experiencing high demand. Please try sending your message again in a few seconds.';
       } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
         userFriendlyError = 'Error: API Quota exceeded. Please try again in a moment.';
       } else if (errorMsg.includes('safety')) {
