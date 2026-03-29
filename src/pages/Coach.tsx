@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth, getAvatarUrl } from '../App';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, orderBy, limit, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Bell, Mic, Send, User, RotateCcw, CloudSun, X, Activity, Plus, MessageSquare, Thermometer, Wind, Droplets, History, Trash2 } from 'lucide-react';
+import { Bell, Mic, Send, User, RotateCcw, CloudSun, X, Activity, Plus, MessageSquare, Thermometer, Wind, Droplets, History, Trash2, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
@@ -18,7 +18,7 @@ export default function Coach() {
 
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<{role: string, text: string}[]>([]);
+  const [messages, setMessages] = useState<{role: string, text: string, isError?: boolean}[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [liveText, setLiveText] = useState('User Experience (UX) design is the process of creating products, systems, or services that offer meaningful, efficient, and enjoyable experiences for users.');
@@ -135,9 +135,9 @@ export default function Coach() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!inputText.trim() || !user || !ai) return;
-    const userMsg = inputText;
+  const handleSend = async (textToSend?: string) => {
+    const userMsg = textToSend || inputText;
+    if (!userMsg.trim() || !user || !ai) return;
     setInputText('');
     
     let currentSessionId = sessionId;
@@ -478,11 +478,31 @@ export default function Coach() {
       {showChat ? (
         <div className="space-y-4">
           {messages.map((msg, i) => (
-            <div key={i} className={`p-4 rounded-2xl ${msg.role === 'user' ? 'bg-orange-500 text-white ml-auto' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'} max-w-[80%] transition-colors duration-300`}>
+            <motion.div 
+              key={i} 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-4 rounded-2xl ${msg.role === 'user' ? 'bg-orange-500 text-white ml-auto' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'} max-w-[85%] transition-colors duration-300 ${msg.isError ? 'border border-red-500' : ''}`}
+            >
               {msg.text}
-            </div>
+              {msg.isError && (
+                <button onClick={() => handleSend(messages[i-1].text)} className="flex items-center gap-1 mt-2 text-xs text-red-500 hover:underline">
+                  <RefreshCw className="w-3 h-3" /> Retry
+                </button>
+              )}
+            </motion.div>
           ))}
-          {isTyping && <div className="p-4 rounded-2xl bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 shadow-sm transition-colors duration-300">{t('coach.thinking')}</div>}
+          {isTyping && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="p-4 rounded-2xl bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 shadow-sm transition-colors duration-300 flex items-center gap-2"
+            >
+              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" />
+              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce delay-150" />
+              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce delay-300" />
+            </motion.div>
+          )}
           <div ref={messagesEndRef} />
         </div>
       ) : (
@@ -668,7 +688,7 @@ export default function Coach() {
           className="flex-1 bg-transparent px-4 py-2 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400"
         />
         <button 
-          onClick={handleSend}
+          onClick={() => handleSend()}
           className="w-10 h-10 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
         >
           <Send className="w-4 h-4 ml-1" />
