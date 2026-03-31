@@ -23,6 +23,7 @@ export default function Coach() {
   const [isRecording, setIsRecording] = useState(false);
   const [liveText, setLiveText] = useState('User Experience (UX) design is the process of creating products, systems, or services that offer meaningful, efficient, and enjoyable experiences for users.');
   const [weather, setWeather] = useState<string | null>(null);
+  const [weatherData, setWeatherData] = useState<any | null>(null);
   const [showWeatherModal, setShowWeatherModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
@@ -59,37 +60,41 @@ export default function Coach() {
     try {
       const pos = await getPosition();
       if (!pos) {
-        setWeather('Location access required for weather.');
+        const errorMsg = 'Location access denied or unavailable.';
+        setWeather(errorMsg);
+        setWeatherData(null);
         return;
       }
       
       const { latitude, longitude } = pos.coords;
       const weatherRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,apparent_temperature&timezone=auto`
       );
       
       if (!weatherRes.ok) throw new Error('Failed to fetch weather');
       const data = await weatherRes.json();
       const current = data.current;
       
-      // Simple client-side formatting (much faster than LLM)
-      const weatherText = `It is currently ${current.temperature_2m}°C with a wind speed of ${current.wind_speed_10m} km/h.`;
+      // Detailed weather formatting
+      const weatherText = `It is currently ${current.temperature_2m}°C (feels like ${current.apparent_temperature}°C) with a wind speed of ${current.wind_speed_10m} km/h and ${current.relative_humidity_2m}% humidity.`;
       
       setWeather(weatherText);
+      setWeatherData(current);
       localStorage.setItem('neurix_weather', weatherText);
       localStorage.setItem('neurix_weather_time', new Date().getTime().toString());
     } catch (error: any) {
       console.error("Weather fetch error:", error);
       const errorMsg = error.message || String(error);
+      let userFriendlyError = 'Weather unavailable. Please try again.';
+      
       if (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('invalid API key')) {
-        setWeather('Error: Invalid API Key. Please check your Netlify environment variables.');
-      } else if (errorMsg.includes('503') || errorMsg.includes('high demand')) {
-        setWeather('The AI service is currently busy. Please click refresh in a moment.');
+        userFriendlyError = 'Error: Invalid API Key.';
       } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
-        setWeather('Error: API Quota exceeded. Please try again later.');
-      } else {
-        if (!weather) setWeather('Weather unavailable. Please check your connection or API key.');
+        userFriendlyError = 'Error: API Quota exceeded.';
       }
+      
+      setWeather(userFriendlyError);
+      setWeatherData(null);
     }
   };
 
@@ -649,9 +654,16 @@ The current year is 2026.`,
               </div>
 
               <div className="prose prose-sm prose-orange max-w-none text-gray-800 dark:text-gray-200">
-                <div className="weather-report">
-                  <ReactMarkdown>{weather || 'Loading...'}</ReactMarkdown>
-                </div>
+                {weatherData ? (
+                  <div className="space-y-2">
+                    <p><strong>Temperature:</strong> {weatherData.temperature_2m}°C</p>
+                    <p><strong>Feels Like:</strong> {weatherData.apparent_temperature}°C</p>
+                    <p><strong>Humidity:</strong> {weatherData.relative_humidity_2m}%</p>
+                    <p><strong>Wind Speed:</strong> {weatherData.wind_speed_10m} km/h</p>
+                  </div>
+                ) : (
+                  <p>{weather || 'Loading...'}</p>
+                )}
               </div>
 
               <div className="mt-8 grid grid-cols-3 gap-3">
