@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 export default function Coach() {
   const { user, profile } = useAuth();
@@ -487,31 +488,42 @@ The current year is 2026.`,
       </header>
 
       {showChat ? (
-        <div className="space-y-4">
+        <div className="space-y-6 pb-20">
           {messages.map((msg) => (
             <motion.div 
               key={msg.id} 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`p-4 rounded-2xl ${msg.role === 'user' ? 'bg-orange-500 text-white ml-auto' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'} max-w-[85%] transition-colors duration-300 ${msg.isError ? 'border border-red-500' : ''}`}
+              initial={{ opacity: 0, y: 15, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {msg.text}
-              {msg.isError && (
-                <button onClick={() => handleSend(msg.userMsg)} className="flex items-center gap-1 mt-2 text-xs text-red-500 hover:underline">
-                  <RefreshCw className="w-3 h-3" /> Retry
-                </button>
-              )}
+              <div className={`p-5 rounded-3xl max-w-[85%] shadow-sm transition-all duration-300 ${
+                msg.role === 'user' 
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-br-lg' 
+                  : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-lg border border-gray-100 dark:border-gray-700'
+              } ${msg.isError ? 'border-red-200 bg-red-50' : ''}`}>
+                <p className="text-sm leading-relaxed">{msg.text}</p>
+                <span className={`text-[10px] mt-2 block opacity-50 ${msg.role === 'user' ? 'text-white/70' : 'text-gray-500'}`}>
+                  {format(new Date(), 'HH:mm')}
+                </span>
+                {msg.isError && (
+                  <button onClick={() => handleSend(msg.userMsg)} className="flex items-center gap-1 mt-3 text-xs text-red-500 hover:underline font-medium">
+                    <RefreshCw className="w-3 h-3" /> Retry
+                  </button>
+                )}
+              </div>
             </motion.div>
           ))}
           {isTyping && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="p-4 rounded-2xl bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 shadow-sm transition-colors duration-300 flex items-center gap-2"
+              className="flex justify-start"
             >
-              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" />
-              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce delay-150" />
-              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce delay-300" />
+              <div className="p-5 rounded-3xl rounded-bl-lg bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" />
+                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce delay-150" />
+                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce delay-300" />
+              </div>
             </motion.div>
           )}
           <div ref={messagesEndRef} />
@@ -696,21 +708,23 @@ The current year is 2026.`,
       </AnimatePresence>
 
       {/* Chat Input Area (Fixed Bottom) */}
-      <div className="fixed bottom-24 left-6 right-6 bg-white dark:bg-gray-800 rounded-full shadow-lg p-2 flex items-center gap-3 z-40 border border-transparent dark:border-gray-700 transition-colors duration-300">
-        <input 
-          type="text" 
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder={t('coach.askChatbot')} 
-          className="flex-1 bg-transparent px-4 py-2 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400"
-        />
-        <button 
-          onClick={() => handleSend()}
-          className="w-10 h-10 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-        >
-          <Send className="w-4 h-4 ml-1" />
-        </button>
+      <div className="fixed bottom-24 left-6 right-6 z-40">
+        <div className="bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 p-2 flex items-center gap-2 transition-colors duration-300">
+          <input 
+            type="text" 
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder={t('coach.askChatbot')} 
+            className="flex-1 bg-transparent px-5 py-3 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400"
+          />
+          <button 
+            onClick={() => handleSend()}
+            className="w-10 h-10 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center hover:bg-gray-800 dark:hover:bg-gray-100 transition-all hover:scale-105 active:scale-95"
+          >
+            <Send className="w-4 h-4 ml-0.5" />
+          </button>
+        </div>
       </div>
 
       {/* Voice Mode Overlay */}
