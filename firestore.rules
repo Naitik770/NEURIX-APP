@@ -2,28 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: usernames
-    // Fields: uid (string), createdAt (timestamp)
-    //
-    // Collection: users
-    // Fields: uid, username, name, age, height, weight, personality, goals, xp, level, streak, lifeScore, createdAt, updatedAt
-    //
-    // Collection: publicProfiles
-    // Fields: uid, username, name, avatarSeed, isOnline, lastActive, xp, level, streak, lifeScore, createdAt
-    //
-    // Collection: reminders
-    // Fields: uid, title, time, days, enabled, lastNotified, createdAt
-    //
-    // ... and others from firebase-blueprint.json
-    
-    // ===============================================================
     // Helper Functions
-    // ===============================================================
-    
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -31,151 +10,32 @@ service cloud.firestore {
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "prajapatinaitik2435@gmail.com" && request.auth.token.email_verified == true));
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName']) &&
+             data.uid is string &&
+             data.displayName is string && data.displayName.size() < 100;
     }
-
-    function uidUnchanged() {
-      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
-    }
-
-    function uidNotModified() {
-      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
-    }
-
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
-    function isValidString(field, min, max) {
-      return request.resource.data[field] is string && 
-             request.resource.data[field].size() >= min && 
-             request.resource.data[field].size() <= max;
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
-
-    function isValidUserProfile(data) {
-      return data.uid == request.auth.uid &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.xp is number && data.xp >= 0 &&
-             data.level is number && data.level >= 1 &&
-             data.streak is number && data.streak >= 0 &&
-             data.lifeScore is number && data.lifeScore >= 0 && data.lifeScore <= 100 &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidReminder(data) {
-      return data.uid == request.auth.uid &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             data.time is timestamp &&
-             data.enabled is bool &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidPublicProfile(data) {
-      return data.uid == request.auth.uid &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.createdAt is timestamp;
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
-    match /usernames/{username} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+    
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderId', 'text', 'createdAt', 'status']) &&
+             data.senderId == request.auth.uid &&
+             data.text is string && data.text.size() < 5000 &&
+             data.status in ['sent', 'delivered', 'seen'];
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data);
-      allow update: if isOwner(userId) && isValidUserProfile(request.resource.data) && uidNotModified();
-      allow delete: if isAdmin();
-
-      match /friendRequests/{requestId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isAuthenticated() && (isOwner(userId) || request.resource.data.fromUid == request.auth.uid);
-        allow update: if isOwner(userId) || isAdmin();
-        allow delete: if isOwner(userId) || isAdmin();
-      }
-
-      match /friends/{friendId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId) || isAdmin();
-      }
-
-      match /notifications/{notificationId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId) || isAdmin();
-      }
-
-      match /habits/{habitId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && uidUnchanged();
-        allow update: if isOwner(userId) && uidNotModified();
-        allow delete: if isOwner(userId) || isAdmin();
-      }
-
-      match /habitCompletions/{completionId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId) || isAdmin();
-      }
-
-      match /gameSessions/{sessionId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId) || isAdmin();
-      }
-
-      match /reminders/{reminderId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidReminder(request.resource.data) && uidUnchanged();
-        allow update: if isOwner(userId) && isValidReminder(request.resource.data) && uidNotModified();
-        allow delete: if isOwner(userId) || isAdmin();
-      }
-
-      match /prompts/{promptId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId) || isAdmin();
-      }
-
-      match /chatSessions/{sessionId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId) || isAdmin();
-
-        match /messages/{messageId} {
-          allow read: if isOwner(userId) || isAdmin();
-          allow write: if isOwner(userId) || isAdmin();
-        }
-      }
-    }
-
-    match /chats/{chatId} {
-      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
-      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
-      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
-
-      match /messages/{messageId} {
-        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
-      }
-    }
-
-    match /publicProfiles/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && isValidPublicProfile(request.resource.data);
-      allow update: if isOwner(userId) && isValidPublicProfile(request.resource.data);
-      allow delete: if isAdmin();
+      allow write: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+      allow update: if isAuthenticated() && 
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) || 
+                     (resource.data.senderId == request.auth.uid && isValidMessage(request.resource.data)));
+      allow delete: if isAuthenticated() && resource.data.senderId == request.auth.uid;
     }
   }
 }

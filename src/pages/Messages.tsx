@@ -1,11 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, getAvatarUrl } from '../App';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDoc, where, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDoc, where, getDocs, limit } from 'firebase/firestore';
 import { ArrowLeft, Search, UserPlus, Check, X, MessageCircle, UserX, Clock, UserCheck } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
+
+const UserCard = ({ result, onAdd, onTabChange }: { result: any, onAdd: (id: string) => void, onTabChange: (tab: any) => void }) => (
+  <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-sm flex items-center justify-between border border-transparent hover:border-orange-500/20 transition-all">
+    <div className="flex items-center gap-4">
+      <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
+        <img src={getAvatarUrl(result)} alt="Avatar" className="w-full h-full object-cover" />
+      </div>
+      <div>
+        <h3 className="font-bold text-gray-900 dark:text-white text-lg">{result.name}</h3>
+        <p className="text-sm text-orange-500 font-medium">@{result.username}</p>
+      </div>
+    </div>
+    {result.isFriend ? (
+      <div className="flex items-center gap-2 text-gray-400 bg-gray-50 dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold">
+        <UserCheck className="w-4 h-4" />
+        Friends
+      </div>
+    ) : result.hasSentRequest ? (
+      <div className="flex items-center gap-2 text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-4 py-2 rounded-xl text-xs font-bold">
+        <Clock className="w-4 h-4" />
+        Pending
+      </div>
+    ) : result.hasReceivedRequest ? (
+      <button 
+        onClick={() => onTabChange('requests')} 
+        className="bg-green-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-green-600 transition-all shadow-lg shadow-green-500/20"
+      >
+        View Request
+      </button>
+    ) : (
+      <button 
+        onClick={() => onAdd(result.id)} 
+        className="bg-orange-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-orange-600 transition-all flex items-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95"
+      >
+        <UserPlus className="w-4 h-4" /> Add Friend
+      </button>
+    )}
+  </div>
+);
 
 export default function Messages() {
   const { user, profile } = useAuth();
@@ -15,16 +54,18 @@ export default function Messages() {
   const [requests, setRequests] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [allProfiles, setAllProfiles] = useState<any[]>([]);
+  const [chats, setChats] = useState<any[]>([]);
 
-  // Load from cache
+  // Fetch Chats
   useEffect(() => {
     if (!user) return;
-    const cached = localStorage.getItem(`friends_${user.uid}`);
-    if (cached) {
-      setFriends(JSON.parse(cached));
-    }
+    const q = query(collection(db, 'chats'), where('participants', 'array-contains', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setChats(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'chats'));
+    return () => unsubscribe();
   }, [user]);
 
   // Fetch Friends
@@ -32,61 +73,11 @@ export default function Messages() {
     if (!user) return;
     const q = query(collection(db, `users/${user.uid}/friends`));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const friendIds = snapshot.docs.map(d => d.id);
-      if (friendIds.length === 0) {
-        setFriends([]);
-        return;
-      }
-
-      // Fetch all friend profiles in one or more queries (limit 30 per query)
-      const fetchProfiles = async (ids: string[]) => {
-        const chunks = [];
-        for (let i = 0; i < ids.length; i += 30) {
-          chunks.push(ids.slice(i, i + 30));
-        }
-
-        const profiles: any[] = [];
-        for (const chunk of chunks) {
-          const qProfiles = query(collection(db, 'publicProfiles'), where('__name__', 'in', chunk));
-          const snapProfiles = await getDocs(qProfiles);
-          snapProfiles.forEach(doc => profiles.push({ id: doc.id, ...doc.data() }));
-        }
-        return profiles;
-      };
-
-      const profiles = await fetchProfiles(friendIds);
-      
-      // Fetch all relevant chats in one or more queries to get nicknames
-      const fetchChats = async (ids: string[]) => {
-        const chatIds = ids.map(id => [user.uid, id].sort().join('_'));
-        const chunks = [];
-        for (let i = 0; i < chatIds.length; i += 30) {
-          chunks.push(chatIds.slice(i, i + 30));
-        }
-
-        const chats: any[] = [];
-        for (const chunk of chunks) {
-          const qChats = query(collection(db, 'chats'), where('__name__', 'in', chunk));
-          const snapChats = await getDocs(qChats);
-          snapChats.forEach(doc => chats.push({ id: doc.id, ...doc.data() }));
-        }
-        return chats;
-      };
-
-      const chats = await fetchChats(friendIds);
-      const chatsMap = new Map(chats.map(c => [c.id, c]));
-
-      const friendsWithNicknames = profiles.map((p) => {
-        const chatId = [user.uid, p.id].sort().join('_');
-        const chatData = chatsMap.get(chatId);
-        return {
-          ...p,
-          nickname: chatData?.nicknames?.[p.id]
-        };
-      });
-
-      setFriends(friendsWithNicknames);
-      localStorage.setItem(`friends_${user.uid}`, JSON.stringify(friendsWithNicknames));
+      const friendsData = await Promise.all(snapshot.docs.map(async (d) => {
+        const friendDoc = await getDoc(doc(db, 'publicProfiles', d.id));
+        return { id: d.id, ...friendDoc.data(), nickname: d.data().nickname };
+      }));
+      setFriends(friendsData);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/friends`));
     return () => unsubscribe();
   }, [user]);
@@ -96,113 +87,99 @@ export default function Messages() {
     if (!user) return;
     const q = query(collection(db, `users/${user.uid}/friendRequests`));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const reqs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      const senderIds = Array.from(new Set(reqs.map(r => r.fromUid as string)));
-      
-      if (senderIds.length === 0) {
-        setRequests([]);
-        return;
-      }
-
-      // Fetch all sender profiles in one or more queries (limit 30 per query)
-      const fetchProfiles = async (ids: string[]) => {
-        const chunks = [];
-        for (let i = 0; i < ids.length; i += 30) {
-          chunks.push(ids.slice(i, i + 30));
-        }
-
-        const profiles: any[] = [];
-        for (const chunk of chunks) {
-          const qProfiles = query(collection(db, 'publicProfiles'), where('__name__', 'in', chunk));
-          const snapProfiles = await getDocs(qProfiles);
-          snapProfiles.forEach(doc => profiles.push({ id: doc.id, ...doc.data() }));
-        }
-        return profiles;
-      };
-
-      const profiles = await fetchProfiles(senderIds);
-      const profilesMap = new Map(profiles.map(p => [p.id, p]));
-
-      const reqsWithProfiles = reqs.map(r => ({
-        ...r,
-        senderProfile: profilesMap.get(r.fromUid)
+      const reqsData = await Promise.all(snapshot.docs.map(async (d) => {
+        const reqData = d.data();
+        const senderDoc = await getDoc(doc(db, 'publicProfiles', reqData.fromUid));
+        return { id: d.id, ...reqData, senderProfile: senderDoc.data() };
       }));
-
-      setRequests(reqsWithProfiles);
+      setRequests(reqsData);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/friendRequests`));
     return () => unsubscribe();
   }, [user]);
 
-  // Fetch All Profiles for Search/Suggestions
+  // Fetch Suggestions
   useEffect(() => {
     if (!user || activeTab !== 'add') return;
-    const fetchProfiles = async () => {
+    const fetchSuggestions = async () => {
       try {
-        const q = query(collection(db, 'publicProfiles'));
+        const q = query(collection(db, 'publicProfiles'), limit(10));
         const snapshot = await getDocs(q);
-        setAllProfiles(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(u => u.id !== user.uid));
+        const suggestedUsers = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(u => u.id !== user.uid && !friends.some(f => f.id === u.id));
+        setSuggestions(suggestedUsers);
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'publicProfiles');
+        console.error("Error fetching suggestions:", error);
       }
     };
-    fetchProfiles();
-  }, [user, activeTab]);
+    fetchSuggestions();
+  }, [user, activeTab, friends]);
 
+  // Real-time Search
   useEffect(() => {
-    if (activeTab !== 'add' || !user) return;
-
-    const updateDisplayedUsers = async () => {
-      setIsSearching(true);
-      
-      let filtered = allProfiles;
-      if (searchQuery.trim()) {
-        const queryLower = searchQuery.toLowerCase();
-        filtered = allProfiles.filter(p => 
-          (p.username && p.username.toLowerCase().includes(queryLower)) ||
-          (p.name && p.name.toLowerCase().includes(queryLower))
-        );
-      } else {
-        // Suggested friends: not already friends, random or first 10
-        const friendIds = new Set(friends.map(f => f.id));
-        filtered = allProfiles.filter(p => !friendIds.has(p.id)).slice(0, 10);
+    const searchUsers = async () => {
+      if (!searchQuery.trim() || !user) {
+        setSearchResults([]);
+        return;
       }
 
-      const usersWithStatus = await Promise.all(filtered.map(async (u) => {
-        const isFriend = friends.some(f => f.id === u.id);
-        const hasReceivedRequest = requests.some(r => r.fromUid === u.id);
-        let hasSentRequest = false;
+      setIsSearching(true);
+      try {
+        const lowerQuery = searchQuery.toLowerCase();
+        
+        // Search by username prefix
+        const q1 = query(
+          collection(db, 'publicProfiles'),
+          where('username', '>=', lowerQuery),
+          where('username', '<=', lowerQuery + '\uf8ff'),
+          limit(10)
+        );
 
-        if (!isFriend && !hasReceivedRequest) {
-          try {
-            const sentRequestDoc = await getDoc(doc(db, `users/${u.id}/friendRequests`, user.uid));
-            hasSentRequest = sentRequestDoc.exists();
-          } catch (e) {
-            console.error(e);
+        // Search by name prefix
+        const q2 = query(
+          collection(db, 'publicProfiles'),
+          where('searchName', '>=', lowerQuery),
+          where('searchName', '<=', lowerQuery + '\uf8ff'),
+          limit(10)
+        );
+
+        const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+        
+        const resultsMap = new Map();
+        
+        [...snap1.docs, ...snap2.docs].forEach(doc => {
+          if (doc.id !== user.uid) {
+            resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
           }
-        }
+        });
 
-        return {
-          ...u,
-          isFriend,
-          hasSentRequest,
-          hasReceivedRequest
-        };
-      }));
+        const combinedResults = Array.from(resultsMap.values());
 
-      setSearchResults(usersWithStatus);
-      setIsSearching(false);
+        // Check friend status for each result
+        const finalResults = await Promise.all(combinedResults.map(async (res) => {
+          const friendDoc = await getDoc(doc(db, `users/${user.uid}/friends`, res.id));
+          const sentRequestDoc = await getDoc(doc(db, `users/${res.id}/friendRequests`, user.uid));
+          const receivedRequestDoc = await getDoc(doc(db, `users/${user.uid}/friendRequests`, res.id));
+
+          return {
+            ...res,
+            isFriend: friendDoc.exists(),
+            hasSentRequest: sentRequestDoc.exists(),
+            hasReceivedRequest: receivedRequestDoc.exists()
+          };
+        }));
+
+        setSearchResults(finalResults);
+      } catch (error) {
+        console.error("Search error:", error);
+      } finally {
+        setIsSearching(false);
+      }
     };
 
-    const debounce = setTimeout(() => {
-      updateDisplayedUsers();
-    }, 300);
-
-    return () => clearTimeout(debounce);
-  }, [searchQuery, allProfiles, friends, requests, activeTab, user]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-  };
+    const timeoutId = setTimeout(searchUsers, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, user]);
 
   const sendFriendRequest = async (targetUid: string) => {
     if (!user || !profile?.username) {
@@ -233,11 +210,13 @@ export default function Messages() {
       await setDoc(doc(db, `users/${user.uid}/friends`, request.fromUid), {
         friendUid: request.fromUid,
         friendUsername: senderProfile.username,
+        nickname: '',
         createdAt: serverTimestamp()
       });
       await setDoc(doc(db, `users/${request.fromUid}/friends`, user.uid), {
         friendUid: user.uid,
         friendUsername: profile.username,
+        nickname: '',
         createdAt: serverTimestamp()
       });
       await deleteDoc(doc(db, `users/${user.uid}/friendRequests`, request.id));
@@ -319,28 +298,49 @@ export default function Messages() {
                   <button onClick={() => setActiveTab('add')} className="mt-4 text-orange-500 text-sm font-bold hover:underline">Find people to follow</button>
                 </div>
               ) : (
-                friends.map(friend => (
-                  <div key={friend.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md transition-all border border-transparent hover:border-orange-500/10">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
-                        <img src={getAvatarUrl(friend)} alt="Avatar" className="w-full h-full object-cover" />
+                friends.map(friend => {
+                  const chatId = [user!.uid, friend.id].sort().join('_');
+                  const chatData = chats.find(c => c.id === chatId);
+                  const isUnread = chatData?.lastMessageSenderId !== user?.uid && !chatData?.isLastMessageSeen;
+
+                  return (
+                    <div key={friend.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md transition-all border border-transparent hover:border-orange-500/10">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          <div className="w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
+                            <img src={getAvatarUrl(friend)} alt="Avatar" className="w-full h-full object-cover" />
+                          </div>
+                          {friend.isOnline && (
+                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
+                          )}
+                        </div>
+                        <div>
+                          <h3 className={`font-bold text-gray-900 dark:text-white group-hover:text-orange-500 transition-colors ${isUnread ? 'text-orange-600 dark:text-orange-400' : ''}`}>
+                            {friend.nickname || friend.name}
+                          </h3>
+                          <p className={`text-xs truncate max-w-[150px] sm:max-w-[200px] ${isUnread ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
+                            {chatData?.lastMessage || `@${friend.username}`}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-orange-500 transition-colors">
-                          {friend.nickname || friend.name}
-                        </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">@{friend.username}</p>
+                      <div className="flex items-center gap-3">
+                        {isUnread && (
+                          <div className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-pulse"></div>
+                        )}
+                        <Link 
+                          to={`/chat/${friend.id}`} 
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-sm ${
+                            isUnread 
+                              ? 'bg-orange-500 text-white shadow-orange-500/20' 
+                              : 'bg-gray-50 dark:bg-gray-700 text-gray-400 group-hover:bg-orange-500 group-hover:text-white group-hover:shadow-orange-500/20'
+                          }`}
+                        >
+                          <MessageCircle className="w-6 h-6" />
+                        </Link>
                       </div>
                     </div>
-                    <Link 
-                      to={`/chat/${friend.id}`} 
-                      state={{ friendProfile: friend }}
-                      className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center text-gray-400 group-hover:bg-orange-500 group-hover:text-white transition-all shadow-sm group-hover:shadow-orange-500/20"
-                    >
-                      <MessageCircle className="w-6 h-6" />
-                    </Link>
-                  </div>
-                ))
+                  );
+                })
               )}
             </>
           )}
@@ -388,7 +388,7 @@ export default function Messages() {
 
           {activeTab === 'add' && (
             <div>
-              <form onSubmit={handleSearch} className="relative mb-8">
+              <div className="relative mb-8">
                 <input
                   type="text"
                   placeholder="Search by name or username..."
@@ -402,59 +402,33 @@ export default function Messages() {
                     <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
-              </form>
-
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-2">
-                  {searchQuery.trim() ? 'Search Results' : 'Suggested Friends'}
-                </h3>
-                {searchResults.length === 0 && !isSearching ? (
-                  <div className="text-center py-10 text-gray-500 dark:text-gray-400">
-                    No users found.
-                  </div>
-                ) : (
-                  searchResults.map(result => {
-                    return (
-                      <div key={result.id} className="bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-sm flex items-center justify-between border border-transparent hover:border-orange-500/20 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
-                            <img src={getAvatarUrl(result)} alt="Avatar" className="w-full h-full object-cover" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-gray-900 dark:text-white text-lg">{result.name}</h3>
-                            <p className="text-sm text-orange-500 font-medium">@{result.username}</p>
-                          </div>
-                        </div>
-                        {result.isFriend ? (
-                          <div className="flex items-center gap-2 text-gray-400 bg-gray-50 dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold">
-                            <UserCheck className="w-4 h-4" />
-                            Friends
-                          </div>
-                        ) : result.hasSentRequest ? (
-                          <div className="flex items-center gap-2 text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-4 py-2 rounded-xl text-xs font-bold">
-                            <Clock className="w-4 h-4" />
-                            Pending
-                          </div>
-                        ) : result.hasReceivedRequest ? (
-                          <button 
-                            onClick={() => setActiveTab('requests')} 
-                            className="bg-green-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-green-600 transition-all shadow-lg shadow-green-500/20"
-                          >
-                            View Request
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => sendFriendRequest(result.id)} 
-                            className="bg-orange-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-orange-600 transition-all flex items-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95"
-                          >
-                            <UserPlus className="w-4 h-4" /> Add Friend
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
               </div>
+
+              {searchQuery.trim() ? (
+                searchResults.length > 0 ? (
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-2">Search Results</h3>
+                    {searchResults.map(result => (
+                      <UserCard key={result.id} result={result} onAdd={sendFriendRequest} onTabChange={setActiveTab} />
+                    ))}
+                  </div>
+                ) : !isSearching && (
+                  <div className="text-center py-10 opacity-50">
+                    <p className="text-sm">No users found matching "{searchQuery}"</p>
+                  </div>
+                )
+              ) : (
+                <div className="space-y-6">
+                  {suggestions.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-2">Suggested Friends</h3>
+                      {suggestions.map(result => (
+                        <UserCard key={result.id} result={result} onAdd={sendFriendRequest} onTabChange={setActiveTab} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </motion.div>
