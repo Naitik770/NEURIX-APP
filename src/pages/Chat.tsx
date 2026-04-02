@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, getAvatarUrl } from '../App';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, onSnapshot, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
@@ -12,21 +12,10 @@ export default function Chat() {
   const { friendId } = useParams<{ friendId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [friendProfile, setFriendProfile] = useState<any>(location.state?.friendProfile || null);
+  const [friendProfile, setFriendProfile] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(!location.state?.friendProfile);
-
-  // Load from cache
-  useEffect(() => {
-    if (!user || !friendId) return;
-    const chatId = [user.uid, friendId].sort().join('_');
-    const cached = localStorage.getItem(`chat_${chatId}`);
-    if (cached) {
-      setMessages(JSON.parse(cached).map((m: any) => ({ ...m, createdAt: new Date(m.createdAt) })));
-    }
-  }, [user, friendId]);
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,8 +73,6 @@ export default function Chat() {
         createdAt: doc.data().createdAt?.toDate() || new Date() 
       }));
       setMessages(newMessages);
-      const chatId = [user.uid, friendId].sort().join('_');
-      localStorage.setItem(`chat_${chatId}`, JSON.stringify(newMessages.slice(-20)));
 
       // Mark unread messages as read
       const unreadMessages = snapshot.docs.filter(doc => {
@@ -476,251 +463,214 @@ export default function Chat() {
             </div>
           </div>
         ) : (
-          <>
-            {Object.entries(messageGroups).map(([date, group]) => (
-              <div key={date} className="flex flex-col">
-                <div className="flex justify-center my-6">
-                  <span className="px-3 py-1 bg-gray-200/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-full text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-                    {date === 'pending' ? 'Sending...' : (isToday(new Date(date)) ? 'Today' : (isYesterday(new Date(date)) ? 'Yesterday' : format(new Date(date), 'MMMM d, yyyy')))}
-                  </span>
-                </div>
-                {group.map((msg, index) => {
-                  const isMe = msg.senderId === user?.uid;
-                  const prevMsg = index > 0 ? group[index - 1] : null;
-                  const nextMsg = index < group.length - 1 ? group[index + 1] : null;
-                  
-                  const isFirstInSequence = !prevMsg || prevMsg.senderId !== msg.senderId;
-                  const isLastInSequence = !nextMsg || nextMsg.senderId !== msg.senderId;
-                  
-                  const isLastReadByFriend = isMe && msg.isRead && (!nextMsg || !nextMsg.isRead || nextMsg.senderId !== user.uid);
-
-                  const spacingClass = isLastInSequence ? 'mb-4' : 'mb-1';
-
-                  let bubbleShape = '';
-                  if (isMe) {
-                    bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tr-2xl' : 'rounded-tr-sm'} ${isLastInSequence ? 'rounded-br-2xl' : 'rounded-br-sm'}`;
-                  } else {
-                    bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tl-2xl' : 'rounded-tl-sm'} ${isLastInSequence ? 'rounded-bl-2xl' : 'rounded-bl-sm'}`;
-                  }
-
-                  return (
-                    <div 
-                      key={msg.id} 
-                      id={`msg-${msg.id}`}
-                      className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 transition-colors duration-500 px-1 ${spacingClass} relative group/msg overflow-visible`}
-                    >
-                      {/* Swipe Reply Icon Background */}
-                      <div 
-                        className={`absolute inset-y-0 flex items-center px-4 pointer-events-none transition-opacity duration-200 ${
-                          isMe ? 'right-0 justify-end' : 'left-0 justify-start'
-                        }`}
-                        style={{ 
-                          opacity: swipingMessageId === msg.id ? Math.min(Math.abs(swipeX) / 60, 1) : 0,
-                          zIndex: 0
-                        }}
-                      >
-                        <div className={`p-2 rounded-full bg-orange-500 text-white shadow-lg transform transition-transform duration-200 ${
-                          swipingMessageId === msg.id && Math.abs(swipeX) > 70 ? 'scale-110' : 'scale-100'
-                        }`}>
-                          <CornerUpLeft className={`w-4 h-4 ${isMe ? '' : 'rotate-180'}`} />
-                        </div>
-                      </div>
-
-                      <motion.div
-                        className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 w-full relative z-10`}
-                        drag="x"
-                        dragConstraints={{ left: isMe ? -100 : 0, right: isMe ? 0 : 100 }}
-                        dragElastic={0.2}
-                        onDragStart={() => setSwipingMessageId(msg.id)}
-                        onDrag={(e, info) => {
-                          setSwipeX(info.offset.x);
-                        }}
-                        onDragEnd={(e, info) => {
-                          const threshold = 70;
-                          const isTriggered = isMe ? info.offset.x < -threshold : info.offset.x > threshold;
-                          
-                          if (isTriggered) {
-                            setReplyingTo(msg);
-                            // Haptic feedback simulation
-                            if ('vibrate' in navigator) navigator.vibrate(10);
-                          }
-                          
-                          setSwipingMessageId(null);
-                          setSwipeX(0);
-                        }}
-                        animate={{ x: swipingMessageId === msg.id ? swipeX : 0 }}
-                        transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                      >
-                        {!isMe && (
-                          <div className="w-6 h-6 shrink-0 mb-1">
-                            {isLastInSequence && (
-                              <div className="w-full h-full rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden">
-                                <img src={getAvatarUrl(friendProfile)} alt="Avatar" className="w-full h-full object-cover" />
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div 
-                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}
-                          onContextMenu={(e) => handleContextMenu(e, msg)}
-                          onTouchStart={(e) => {
-                            const timer = setTimeout(() => handleContextMenu(e, msg), 500);
-                            e.currentTarget.dataset.timer = timer.toString();
-                          }}
-                          onTouchEnd={(e) => {
-                            clearTimeout(Number(e.currentTarget.dataset.timer));
-                          }}
-                          onTouchMove={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
-                        >
-                          <div className={`relative group select-none ${
-                            isMe 
-                              ? `bg-orange-500 text-white shadow-sm ${bubbleShape}` 
-                              : `bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm border border-gray-100 dark:border-gray-700 ${bubbleShape}`
-                          } ${(!msg.text && msg.attachment && msg.attachment.type !== 'file') ? 'p-1 bg-transparent border-none shadow-none' : 'px-4 py-2.5'}`}>
-                            
-                            {/* Reply Preview */}
-                            {msg.replyTo && (
-                              <div 
-                                onClick={() => scrollToMessage(msg.replyTo.id)}
-                                className={`mb-2 p-2 rounded-xl text-xs border-l-2 cursor-pointer opacity-90 hover:opacity-100 transition-all ${
-                                  isMe ? 'bg-black/10 border-white/50 text-white' : 'bg-gray-50 dark:bg-gray-700/50 border-orange-500 text-gray-700 dark:text-gray-300'
-                                }`}
-                              >
-                                <span className="font-bold block mb-0.5">{msg.replyTo.senderName}</span>
-                                <p className="truncate opacity-80">
-                                  {msg.replyTo.attachment ? `[${msg.replyTo.attachment.type}]` : msg.replyTo.text}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Attachments */}
-                            {msg.attachment && (
-                              <div className={`mb-1 relative group/media ${(!msg.text && msg.attachment.type !== 'file') ? '' : 'rounded-xl overflow-hidden'}`}>
-                                {msg.attachment.type === 'image' && (
-                                  <div 
-                                    className="relative cursor-pointer overflow-hidden rounded-2xl" 
-                                    onClick={() => setPreviewMedia({url: msg.attachment.data, type: 'image', name: msg.attachment.name, id: msg.id})}
-                                  >
-                                    <img src={msg.attachment.data} alt="attachment" loading="lazy" className="max-w-full h-auto max-h-64 object-cover hover:scale-[1.02] transition-transform duration-300" />
-                                    <div className="absolute inset-0 bg-black/0 group-hover/media:bg-black/10 transition-colors flex items-center justify-center">
-                                      {downloadingId === msg.id ? (
-                                        <div className="p-2 bg-black/50 rounded-full backdrop-blur-md">
-                                          <Loader2 className="w-5 h-5 text-white animate-spin" />
-                                        </div>
-                                      ) : downloadedIds.has(msg.id) ? (
-                                        <div className="p-2 bg-green-500/80 rounded-full backdrop-blur-md">
-                                          <Check className="w-5 h-5 text-white" />
-                                        </div>
-                                      ) : (
-                                        <div className="p-2 bg-black/40 rounded-full backdrop-blur-md opacity-0 group-hover/media:opacity-100 transition-all transform scale-90 group-hover/media:scale-100">
-                                          <Download className="w-5 h-5 text-white drop-shadow-md" onClick={(e) => { e.stopPropagation(); handleDownload(msg.attachment.data, msg.attachment.name, msg.id); }} />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                                {msg.attachment.type === 'video' && (
-                                  <div 
-                                    className="relative cursor-pointer overflow-hidden rounded-2xl" 
-                                    onClick={() => setPreviewMedia({url: msg.attachment.data, type: 'video', name: msg.attachment.name, id: msg.id})}
-                                  >
-                                    <video src={msg.attachment.data} className="max-w-full h-auto max-h-64 object-cover" />
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/media:bg-black/30 transition-colors">
-                                      <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 shadow-lg group-hover/media:scale-110 transition-transform">
-                                        <Play className="w-5 h-5 text-white fill-white ml-1" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                                {msg.attachment.type === 'file' && (
-                                  <div 
-                                    className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all active:scale-[0.98] ${
-                                      isMe 
-                                        ? 'bg-white/10 hover:bg-white/20 border border-white/20' 
-                                        : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
-                                    }`}
-                                    onClick={() => setFileAction({url: msg.attachment.data, name: msg.attachment.name, type: 'file', id: msg.id})}
-                                  >
-                                    <div className={`p-2.5 rounded-lg shrink-0 ${isMe ? 'bg-white/20 text-white' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-500'}`}>
-                                      <FileText className="w-6 h-6" />
-                                    </div>
-                                    <div className="flex flex-col min-w-0 flex-1 max-w-[120px]">
-                                      <span className="text-xs font-bold truncate">
-                                        {msg.attachment.name.length > 12 
-                                          ? `${msg.attachment.name.split('.').slice(0, -1).join('.').substring(0, 6)}...${msg.attachment.name.split('.').pop()}`
-                                          : msg.attachment.name
-                                        }
-                                      </span>
-                                      <span className={`text-[9px] font-medium uppercase tracking-tighter ${isMe ? 'text-white/60' : 'text-gray-400'}`}>
-                                        {msg.attachment.name.split('.').pop()?.toUpperCase() || 'FILE'}
-                                      </span>
-                                    </div>
-                                    <div className="shrink-0 pl-2">
-                                      {downloadingId === msg.id ? (
-                                        <Loader2 className={`w-5 h-5 animate-spin ${isMe ? 'text-white' : 'text-gray-400'}`} />
-                                      ) : downloadedIds.has(msg.id) ? (
-                                        <Check className={`w-5 h-5 ${isMe ? 'text-white' : 'text-green-500'}`} />
-                                      ) : (
-                                        <Download className={`w-5 h-5 ${isMe ? 'text-white/70' : 'text-gray-400'}`} />
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          {msg.text && <p className={`text-[15px] leading-relaxed whitespace-pre-wrap break-words ${(!msg.text && msg.attachment && msg.attachment.type !== 'file') ? 'hidden' : ''}`}>{msg.text}</p>}
-                        </div>
-                        <div className="flex items-center gap-1 mt-1 px-1 min-h-[12px]">
-                          {isMe && isLastReadByFriend && (
-                            <span className="text-[9px] font-bold text-orange-500 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500">
-                              Seen
-                            </span>
-                          )}
-                          {msg.isEdited && <span className="text-[9px] text-gray-400 italic">(edited)</span>}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </div>
-                  );
-                })}
+          Object.entries(messageGroups).map(([date, group]) => (
+            <div key={date} className="flex flex-col">
+              <div className="flex justify-center my-6">
+                <span className="px-3 py-1 bg-gray-200/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-full text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                  {date === 'pending' ? 'Sending...' : (isToday(new Date(date)) ? 'Today' : (isYesterday(new Date(date)) ? 'Yesterday' : format(new Date(date), 'MMMM d, yyyy')))}
+                </span>
               </div>
-            ))}
-            
-            {/* Friend Typing Indicator */}
-            <AnimatePresence>
-              {friendTyping && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="flex justify-start items-end gap-2 px-1 mb-4"
-                >
-                  <div className="w-6 h-6 shrink-0 mb-1">
-                    <div className="w-full h-full rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden">
-                      <img src={getAvatarUrl(friendProfile)} alt="Avatar" className="w-full h-full object-cover" />
+              {group.map((msg, index) => {
+                const isMe = msg.senderId === user?.uid;
+                const prevMsg = index > 0 ? group[index - 1] : null;
+                const nextMsg = index < group.length - 1 ? group[index + 1] : null;
+                
+                const isFirstInSequence = !prevMsg || prevMsg.senderId !== msg.senderId;
+                const isLastInSequence = !nextMsg || nextMsg.senderId !== msg.senderId;
+                
+                const isLastReadByFriend = isMe && msg.isRead && (!nextMsg || !nextMsg.isRead || nextMsg.senderId !== user.uid);
+
+                const spacingClass = isLastInSequence ? 'mb-4' : 'mb-1';
+
+                let bubbleShape = '';
+                if (isMe) {
+                  bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tr-2xl' : 'rounded-tr-sm'} ${isLastInSequence ? 'rounded-br-2xl' : 'rounded-br-sm'}`;
+                } else {
+                  bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tl-2xl' : 'rounded-tl-sm'} ${isLastInSequence ? 'rounded-bl-2xl' : 'rounded-bl-sm'}`;
+                }
+
+                return (
+                  <div 
+                    key={msg.id} 
+                    id={`msg-${msg.id}`}
+                    className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 transition-colors duration-500 px-1 ${spacingClass} relative group/msg overflow-visible`}
+                  >
+                    {/* Swipe Reply Icon Background */}
+                    <div 
+                      className={`absolute inset-y-0 flex items-center px-4 pointer-events-none transition-opacity duration-200 ${
+                        isMe ? 'right-0 justify-end' : 'left-0 justify-start'
+                      }`}
+                      style={{ 
+                        opacity: swipingMessageId === msg.id ? Math.min(Math.abs(swipeX) / 60, 1) : 0,
+                        zIndex: 0
+                      }}
+                    >
+                      <div className={`p-2 rounded-full bg-orange-500 text-white shadow-lg transform transition-transform duration-200 ${
+                        swipingMessageId === msg.id && Math.abs(swipeX) > 70 ? 'scale-110' : 'scale-100'
+                      }`}>
+                        <CornerUpLeft className={`w-4 h-4 ${isMe ? '' : 'rotate-180'}`} />
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-white dark:bg-gray-800 px-4 py-3 rounded-2xl rounded-tl-2xl rounded-bl-sm shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-1">
+
                     <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
-                      className="w-1.5 h-1.5 bg-orange-500 rounded-full"
-                    />
-                    <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
-                      className="w-1.5 h-1.5 bg-orange-500 rounded-full"
-                    />
-                    <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
-                      className="w-1.5 h-1.5 bg-orange-500 rounded-full"
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </>
+                      className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 w-full relative z-10`}
+                      drag="x"
+                      dragConstraints={{ left: isMe ? -100 : 0, right: isMe ? 0 : 100 }}
+                      dragElastic={0.2}
+                      onDragStart={() => setSwipingMessageId(msg.id)}
+                      onDrag={(e, info) => {
+                        setSwipeX(info.offset.x);
+                      }}
+                      onDragEnd={(e, info) => {
+                        const threshold = 70;
+                        const isTriggered = isMe ? info.offset.x < -threshold : info.offset.x > threshold;
+                        
+                        if (isTriggered) {
+                          setReplyingTo(msg);
+                          // Haptic feedback simulation
+                          if ('vibrate' in navigator) navigator.vibrate(10);
+                        }
+                        
+                        setSwipingMessageId(null);
+                        setSwipeX(0);
+                      }}
+                      animate={{ x: swipingMessageId === msg.id ? swipeX : 0 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                    >
+                      {!isMe && (
+                        <div className="w-6 h-6 shrink-0 mb-1">
+                          {isLastInSequence && (
+                            <div className="w-full h-full rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden">
+                              <img src={getAvatarUrl(friendProfile)} alt="Avatar" className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div 
+                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}
+                        onContextMenu={(e) => handleContextMenu(e, msg)}
+                        onTouchStart={(e) => {
+                          const timer = setTimeout(() => handleContextMenu(e, msg), 500);
+                          e.currentTarget.dataset.timer = timer.toString();
+                        }}
+                        onTouchEnd={(e) => {
+                          clearTimeout(Number(e.currentTarget.dataset.timer));
+                        }}
+                        onTouchMove={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
+                      >
+                        <div className={`relative group select-none ${
+                          isMe 
+                            ? `bg-orange-500 text-white shadow-sm ${bubbleShape}` 
+                            : `bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm border border-gray-100 dark:border-gray-700 ${bubbleShape}`
+                        } ${(!msg.text && msg.attachment && msg.attachment.type !== 'file') ? 'p-1 bg-transparent border-none shadow-none' : 'px-4 py-2.5'}`}>
+                          
+                          {/* Reply Preview */}
+                          {msg.replyTo && (
+                            <div 
+                              onClick={() => scrollToMessage(msg.replyTo.id)}
+                              className={`mb-2 p-2 rounded-xl text-xs border-l-2 cursor-pointer opacity-90 hover:opacity-100 transition-all ${
+                                isMe ? 'bg-black/10 border-white/50 text-white' : 'bg-gray-50 dark:bg-gray-700/50 border-orange-500 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              <span className="font-bold block mb-0.5">{msg.replyTo.senderName}</span>
+                              <p className="truncate opacity-80">
+                                {msg.replyTo.attachment ? `[${msg.replyTo.attachment.type}]` : msg.replyTo.text}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Attachments */}
+                          {msg.attachment && (
+                            <div className={`mb-1 relative group/media ${(!msg.text && msg.attachment.type !== 'file') ? '' : 'rounded-xl overflow-hidden'}`}>
+                              {msg.attachment.type === 'image' && (
+                                <div 
+                                  className="relative cursor-pointer overflow-hidden rounded-2xl" 
+                                  onClick={() => setPreviewMedia({url: msg.attachment.data, type: 'image', name: msg.attachment.name, id: msg.id})}
+                                >
+                                  <img src={msg.attachment.data} alt="attachment" loading="lazy" className="max-w-full h-auto max-h-64 object-cover hover:scale-[1.02] transition-transform duration-300" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover/media:bg-black/10 transition-colors flex items-center justify-center">
+                                    {downloadingId === msg.id ? (
+                                      <div className="p-2 bg-black/50 rounded-full backdrop-blur-md">
+                                        <Loader2 className="w-5 h-5 text-white animate-spin" />
+                                      </div>
+                                    ) : downloadedIds.has(msg.id) ? (
+                                      <div className="p-2 bg-green-500/80 rounded-full backdrop-blur-md">
+                                        <Check className="w-5 h-5 text-white" />
+                                      </div>
+                                    ) : (
+                                      <div className="p-2 bg-black/40 rounded-full backdrop-blur-md opacity-0 group-hover/media:opacity-100 transition-all transform scale-90 group-hover/media:scale-100">
+                                        <Download className="w-5 h-5 text-white drop-shadow-md" onClick={(e) => { e.stopPropagation(); handleDownload(msg.attachment.data, msg.attachment.name, msg.id); }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              {msg.attachment.type === 'video' && (
+                                <div 
+                                  className="relative cursor-pointer overflow-hidden rounded-2xl" 
+                                  onClick={() => setPreviewMedia({url: msg.attachment.data, type: 'video', name: msg.attachment.name, id: msg.id})}
+                                >
+                                  <video src={msg.attachment.data} className="max-w-full h-auto max-h-64 object-cover" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/media:bg-black/30 transition-colors">
+                                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 shadow-lg group-hover/media:scale-110 transition-transform">
+                                      <Play className="w-5 h-5 text-white fill-white ml-1" />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {msg.attachment.type === 'file' && (
+                                <div 
+                                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all active:scale-[0.98] ${
+                                    isMe 
+                                      ? 'bg-white/10 hover:bg-white/20 border border-white/20' 
+                                      : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
+                                  }`}
+                                  onClick={() => setFileAction({url: msg.attachment.data, name: msg.attachment.name, type: 'file', id: msg.id})}
+                                >
+                                  <div className={`p-2.5 rounded-lg shrink-0 ${isMe ? 'bg-white/20 text-white' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-500'}`}>
+                                    <FileText className="w-6 h-6" />
+                                  </div>
+                                  <div className="flex flex-col min-w-0 flex-1 max-w-[120px]">
+                                    <span className="text-xs font-bold truncate">
+                                      {msg.attachment.name.length > 12 
+                                        ? `${msg.attachment.name.split('.').slice(0, -1).join('.').substring(0, 6)}...${msg.attachment.name.split('.').pop()}`
+                                        : msg.attachment.name
+                                      }
+                                    </span>
+                                    <span className={`text-[9px] font-medium uppercase tracking-tighter ${isMe ? 'text-white/60' : 'text-gray-400'}`}>
+                                      {msg.attachment.name.split('.').pop()?.toUpperCase() || 'FILE'}
+                                    </span>
+                                  </div>
+                                  <div className="shrink-0 pl-2">
+                                    {downloadingId === msg.id ? (
+                                      <Loader2 className={`w-5 h-5 animate-spin ${isMe ? 'text-white' : 'text-gray-400'}`} />
+                                    ) : downloadedIds.has(msg.id) ? (
+                                      <Check className={`w-5 h-5 ${isMe ? 'text-white' : 'text-green-500'}`} />
+                                    ) : (
+                                      <Download className={`w-5 h-5 ${isMe ? 'text-white/70' : 'text-gray-400'}`} />
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        {msg.text && <p className={`text-[15px] leading-relaxed whitespace-pre-wrap break-words ${(!msg.text && msg.attachment && msg.attachment.type !== 'file') ? 'hidden' : ''}`}>{msg.text}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 mt-1 px-1 min-h-[12px]">
+                        {isMe && isLastReadByFriend && (
+                          <span className="text-[9px] font-bold text-orange-500 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500">
+                            Seen
+                          </span>
+                        )}
+                        {msg.isEdited && <span className="text-[9px] text-gray-400 italic">(edited)</span>}
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+                );
+              })}
+            </div>
+          ))
         )}
         <div ref={messagesEndRef} />
       </div>

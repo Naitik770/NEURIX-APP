@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, onSnapshot, query, collection, where, getCountFromServer } from 'firebase/firestore';
-import { ArrowLeft, Trophy, Zap, Star, Heart, Calendar, User, Shield, MessageCircle, Medal, Flame, Award, Target } from 'lucide-react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { ArrowLeft, Trophy, Zap, Star, Heart, Calendar, User, Shield, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { getAvatarUrl } from '../App';
 
@@ -11,27 +11,13 @@ export default function FriendProfile() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [rank, setRank] = useState<number | null>(null);
 
   useEffect(() => {
     if (!friendId) return;
     const docRef = doc(db, 'publicProfiles', friendId);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setProfile(data);
-        
-        // Fetch Rank
-        const fetchRank = async () => {
-          try {
-            const q = query(collection(db, 'publicProfiles'), where('xp', '>', data.xp || 0));
-            const snapshot = await getCountFromServer(q);
-            setRank(snapshot.data().count + 1);
-          } catch (error) {
-            console.error("Error fetching rank:", error);
-          }
-        };
-        fetchRank();
+        setProfile(docSnap.data());
       }
       setLoading(false);
     }, (error) => {
@@ -65,9 +51,10 @@ export default function FriendProfile() {
   }
 
   const stats = [
-    { label: 'Streak', value: `${profile.streak || 0} Days`, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
-    { label: 'Level', value: profile.level || 1, icon: Award, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-    { label: 'Life Score', value: profile.lifeScore || 50, icon: Target, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20' },
+    { label: 'Level', value: profile.level || 1, icon: Shield, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+    { label: 'XP', value: profile.xp || 0, icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
+    { label: 'Streak', value: `${profile.streak || 0} Days`, icon: Trophy, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
+    { label: 'Life Score', value: profile.lifeScore || 50, icon: Heart, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' },
   ];
 
   return (
@@ -111,51 +98,25 @@ export default function FriendProfile() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mt-10">
+          <div className="grid grid-cols-2 gap-4 mt-10">
             {stats.map((stat, idx) => (
               <motion.div
                 key={stat.label}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className={`${stat.bg} p-4 rounded-3xl border border-white/50 dark:border-gray-700/50 flex flex-col items-center text-center`}
+                className={`${stat.bg} p-5 rounded-3xl border border-white/50 dark:border-gray-700/50 flex flex-col items-center text-center`}
               >
-                <div className={`p-2 rounded-2xl bg-white dark:bg-gray-800 shadow-sm mb-2 ${stat.color}`}>
-                  <stat.icon className="w-5 h-5" />
+                <div className={`p-3 rounded-2xl bg-white dark:bg-gray-800 shadow-sm mb-3 ${stat.color}`}>
+                  <stat.icon className="w-6 h-6" />
                 </div>
-                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">{stat.label}</span>
-                <span className="text-sm font-black text-gray-900 dark:text-white">{stat.value}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{stat.label}</span>
+                <span className="text-lg font-black text-gray-900 dark:text-white">{stat.value}</span>
               </motion.div>
             ))}
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-white dark:bg-gray-800 rounded-3xl p-5 mt-4 border border-gray-100 dark:border-gray-700 flex items-center justify-between shadow-sm"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-500 rounded-2xl flex items-center justify-center">
-                <Trophy className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Friend Rank</p>
-                <p className="text-lg font-black text-gray-900 dark:text-white">#{rank || '--'}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total XP</p>
-              <p className="font-bold text-orange-500">{profile.xp || 0} XP</p>
-            </div>
-          </motion.div>
-
           <div className="mt-10 pt-10 border-t border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">About</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-8">
-              {profile.name} joined on {profile.createdAt?.toDate ? profile.createdAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'recently'} and is currently at level {profile.level || 1} with {profile.xp || 0} XP.
-            </p>
-
             <div className="flex items-center gap-4 mb-6">
               <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center text-gray-400">
                 <Calendar className="w-6 h-6" />

@@ -18,75 +18,23 @@ export default function Messages() {
   const [isSearching, setIsSearching] = useState(false);
   const [allProfiles, setAllProfiles] = useState<any[]>([]);
 
-  // Load from cache
-  useEffect(() => {
-    if (!user) return;
-    const cached = localStorage.getItem(`friends_${user.uid}`);
-    if (cached) {
-      setFriends(JSON.parse(cached));
-    }
-  }, [user]);
-
   // Fetch Friends
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, `users/${user.uid}/friends`));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const friendIds = snapshot.docs.map(d => d.id);
-      if (friendIds.length === 0) {
-        setFriends([]);
-        return;
-      }
-
-      // Fetch all friend profiles in one or more queries (limit 30 per query)
-      const fetchProfiles = async (ids: string[]) => {
-        const chunks = [];
-        for (let i = 0; i < ids.length; i += 30) {
-          chunks.push(ids.slice(i, i + 30));
-        }
-
-        const profiles: any[] = [];
-        for (const chunk of chunks) {
-          const qProfiles = query(collection(db, 'publicProfiles'), where('__name__', 'in', chunk));
-          const snapProfiles = await getDocs(qProfiles);
-          snapProfiles.forEach(doc => profiles.push({ id: doc.id, ...doc.data() }));
-        }
-        return profiles;
-      };
-
-      const profiles = await fetchProfiles(friendIds);
-      
-      // Fetch all relevant chats in one or more queries to get nicknames
-      const fetchChats = async (ids: string[]) => {
-        const chatIds = ids.map(id => [user.uid, id].sort().join('_'));
-        const chunks = [];
-        for (let i = 0; i < chatIds.length; i += 30) {
-          chunks.push(chatIds.slice(i, i + 30));
-        }
-
-        const chats: any[] = [];
-        for (const chunk of chunks) {
-          const qChats = query(collection(db, 'chats'), where('__name__', 'in', chunk));
-          const snapChats = await getDocs(qChats);
-          snapChats.forEach(doc => chats.push({ id: doc.id, ...doc.data() }));
-        }
-        return chats;
-      };
-
-      const chats = await fetchChats(friendIds);
-      const chatsMap = new Map(chats.map(c => [c.id, c]));
-
-      const friendsWithNicknames = profiles.map((p) => {
-        const chatId = [user.uid, p.id].sort().join('_');
-        const chatData = chatsMap.get(chatId);
-        return {
-          ...p,
-          nickname: chatData?.nicknames?.[p.id]
+      const friendsData = await Promise.all(snapshot.docs.map(async (d) => {
+        const friendDoc = await getDoc(doc(db, 'publicProfiles', d.id));
+        const chatId = [user.uid, d.id].sort().join('_');
+        const chatDoc = await getDoc(doc(db, 'chats', chatId));
+        const chatData = chatDoc.exists() ? chatDoc.data() : null;
+        return { 
+          id: d.id, 
+          ...friendDoc.data(),
+          nickname: chatData?.nicknames?.[d.id]
         };
-      });
-
-      setFriends(friendsWithNicknames);
-      localStorage.setItem(`friends_${user.uid}`, JSON.stringify(friendsWithNicknames));
+      }));
+      setFriends(friendsData);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/friends`));
     return () => unsubscribe();
   }, [user]);
@@ -96,39 +44,12 @@ export default function Messages() {
     if (!user) return;
     const q = query(collection(db, `users/${user.uid}/friendRequests`));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const reqs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      const senderIds = Array.from(new Set(reqs.map(r => r.fromUid as string)));
-      
-      if (senderIds.length === 0) {
-        setRequests([]);
-        return;
-      }
-
-      // Fetch all sender profiles in one or more queries (limit 30 per query)
-      const fetchProfiles = async (ids: string[]) => {
-        const chunks = [];
-        for (let i = 0; i < ids.length; i += 30) {
-          chunks.push(ids.slice(i, i + 30));
-        }
-
-        const profiles: any[] = [];
-        for (const chunk of chunks) {
-          const qProfiles = query(collection(db, 'publicProfiles'), where('__name__', 'in', chunk));
-          const snapProfiles = await getDocs(qProfiles);
-          snapProfiles.forEach(doc => profiles.push({ id: doc.id, ...doc.data() }));
-        }
-        return profiles;
-      };
-
-      const profiles = await fetchProfiles(senderIds);
-      const profilesMap = new Map(profiles.map(p => [p.id, p]));
-
-      const reqsWithProfiles = reqs.map(r => ({
-        ...r,
-        senderProfile: profilesMap.get(r.fromUid)
+      const reqsData = await Promise.all(snapshot.docs.map(async (d) => {
+        const reqData = d.data();
+        const senderDoc = await getDoc(doc(db, 'publicProfiles', reqData.fromUid));
+        return { id: d.id, ...reqData, senderProfile: senderDoc.data() };
       }));
-
-      setRequests(reqsWithProfiles);
+      setRequests(reqsData);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/friendRequests`));
     return () => unsubscribe();
   }, [user]);
@@ -334,7 +255,6 @@ export default function Messages() {
                     </div>
                     <Link 
                       to={`/chat/${friend.id}`} 
-                      state={{ friendProfile: friend }}
                       className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center text-gray-400 group-hover:bg-orange-500 group-hover:text-white transition-all shadow-sm group-hover:shadow-orange-500/20"
                     >
                       <MessageCircle className="w-6 h-6" />

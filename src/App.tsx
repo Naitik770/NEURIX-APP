@@ -20,7 +20,6 @@ import Reminders from './pages/Reminders';
 import Messages from './pages/Messages';
 import Chat from './pages/Chat';
 import FriendProfile from './pages/FriendProfile';
-import Leaderboard from './pages/Leaderboard';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import ForgotPassword from './pages/ForgotPassword';
@@ -535,7 +534,6 @@ export default function App() {
             <Route path="/messages" element={<ProtectedRoute><Layout><Messages /></Layout></ProtectedRoute>} />
             <Route path="/chat/:friendId" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
             <Route path="/friend-profile/:friendId" element={<ProtectedRoute><Layout><FriendProfile /></Layout></ProtectedRoute>} />
-            <Route path="/leaderboard" element={<ProtectedRoute><Layout><Leaderboard /></Layout></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           </Routes>
