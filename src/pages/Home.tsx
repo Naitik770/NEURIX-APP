@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth, getAvatarUrl } from '../App';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { Bell, Plus, Check, Clock, Droplet, Wind, Activity, Footprints, Play, Pause, RotateCcw, X, Trash2, Edit2, Book, Moon, Coffee, Dumbbell, Brain, Heart, Music, Utensils, Sun, Timer, Pencil, Flame, Trophy, Loader2 } from 'lucide-react';
+import { Bell, Plus, Check, Clock, Droplet, Wind, Activity, Footprints, Play, Pause, RotateCcw, X, Trash2, Edit2, Book, Moon, Coffee, Dumbbell, Brain, Heart, Music, Utensils, Sun, Timer, Pencil, Flame, Trophy, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, where, getCountFromServer } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -108,8 +108,6 @@ const FocusMode = ({ habit, timeLeft, isRunning, onToggle, onClose, onComplete }
 export default function Home() {
   const { user, profile } = useAuth();
   const { t } = useTranslation();
-  const [rank, setRank] = useState<number | null>(null);
-  const [loadingRank, setLoadingRank] = useState(false);
   const [habits, setHabits] = useState<any[]>([]);
   const [showVerification, setShowVerification] = useState<string | null>(null);
   const [activeTimerHabit, setActiveTimerHabit] = useState<any | null>(null);
@@ -123,33 +121,6 @@ export default function Home() {
   const [newTaskDuration, setNewTaskDuration] = useState('');
   const [newTaskIcon, setNewTaskIcon] = useState('check');
   const [showReminder, setShowReminder] = useState(true);
-
-  // Rank Calculation
-  useEffect(() => {
-    if (!profile?.xp) {
-      if (profile) setRank(null);
-      return;
-    }
-
-    const calculateRank = async () => {
-      setLoadingRank(true);
-      try {
-        const xpValue = profile.xp || 0;
-        const q = query(collection(db, 'publicProfiles'), where('xp', '>', xpValue));
-        const snapshot = await getCountFromServer(q);
-        setRank(snapshot.data().count + 1);
-      } catch (error) {
-        console.error("Error calculating rank:", error);
-        setRank(null);
-      } finally {
-        setLoadingRank(false);
-      }
-    };
-
-    calculateRank();
-    const interval = setInterval(calculateRank, 60000);
-    return () => clearInterval(interval);
-  }, [profile?.xp]);
 
   // Level Up Check
   useEffect(() => {
@@ -290,19 +261,8 @@ export default function Home() {
       });
       
       const userRef = doc(db, `users/${user.uid}`);
-      const newXp = (profile?.xp || 0) + 10;
       await updateDoc(userRef, {
-        xp: newXp
-      });
-
-      // Sync to publicProfiles for ranking
-      const publicProfileRef = doc(db, 'publicProfiles', user.uid);
-      await updateDoc(publicProfileRef, {
-        xp: newXp,
-        streak: (profile?.streak || 0), // Current streak from profile
-        updatedAt: serverTimestamp()
-      }).catch(() => {
-        // Ignore if public profile doesn't exist
+        xp: (profile?.xp || 0) + 10
       });
 
       confetti({
@@ -510,7 +470,7 @@ export default function Home() {
             to="/messages"
             className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-orange-500 dark:hover:text-orange-400 transition-colors relative"
           >
-            <Bell className="w-5 h-5" />
+            <Users className="w-5 h-5" />
             {/* TODO: Add notification badge logic here */}
           </Link>
           <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm transition-colors duration-300">

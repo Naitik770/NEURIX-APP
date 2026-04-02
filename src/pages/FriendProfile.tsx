@@ -1,25 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, onSnapshot, collection, query, where, getCountFromServer } from 'firebase/firestore';
-import { ArrowLeft, Trophy, Star, Zap, Heart, Calendar, User as UserIcon, Loader2 } from 'lucide-react';
-import { getAvatarUrl } from '../App';
+import { doc, onSnapshot, query, collection, where, getCountFromServer } from 'firebase/firestore';
+import { ArrowLeft, Trophy, Zap, Star, Heart, Calendar, User, Shield, MessageCircle, Medal, Flame, Award, Target } from 'lucide-react';
 import { motion } from 'motion/react';
+import { getAvatarUrl } from '../App';
 
 export default function FriendProfile() {
   const { friendId } = useParams<{ friendId: string }>();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
-  const [rank, setRank] = useState<number | null>(null);
-  const [loadingRank, setLoadingRank] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [rank, setRank] = useState<number | null>(null);
 
   useEffect(() => {
     if (!friendId) return;
     const docRef = doc(db, 'publicProfiles', friendId);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        setProfile(docSnap.data());
+        const data = docSnap.data();
+        setProfile(data);
+        
+        // Fetch Rank
+        const fetchRank = async () => {
+          try {
+            const q = query(collection(db, 'publicProfiles'), where('xp', '>', data.xp || 0));
+            const snapshot = await getCountFromServer(q);
+            setRank(snapshot.data().count + 1);
+          } catch (error) {
+            console.error("Error fetching rank:", error);
+          }
+        };
+        fetchRank();
       }
       setLoading(false);
     }, (error) => {
@@ -28,31 +40,6 @@ export default function FriendProfile() {
     });
     return () => unsubscribe();
   }, [friendId]);
-
-  useEffect(() => {
-    if (!profile) return;
-
-    const calculateRank = async () => {
-      setLoadingRank(true);
-      try {
-        const xpValue = profile.xp || 0;
-        const q = query(collection(db, 'publicProfiles'), where('xp', '>', xpValue));
-        const snapshot = await getCountFromServer(q);
-        setRank(snapshot.data().count + 1);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, `publicProfiles (rank calculation for ${profile.uid})`);
-        setRank(null);
-      } finally {
-        setLoadingRank(false);
-      }
-    };
-
-    calculateRank();
-    
-    // Periodically re-calculate to keep it fresh
-    const interval = setInterval(calculateRank, 60000); // Every minute
-    return () => clearInterval(interval);
-  }, [profile?.xp, profile?.uid]);
 
   if (loading) {
     return (
@@ -65,111 +52,135 @@ export default function FriendProfile() {
   if (!profile) {
     return (
       <div className="flex flex-col h-screen bg-[#FDFBF7] dark:bg-gray-900 items-center justify-center p-6 text-center">
-        <UserIcon className="w-16 h-16 text-gray-300 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Profile not found</h2>
-        <button onClick={() => navigate(-1)} className="mt-4 text-orange-500 font-bold">Go Back</button>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Profile Not Found</h2>
+        <p className="text-gray-500 dark:text-gray-400 mb-6">The user you're looking for doesn't exist or has a private profile.</p>
+        <button 
+          onClick={() => navigate(-1)}
+          className="px-6 py-3 bg-orange-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20"
+        >
+          Go Back
+        </button>
       </div>
     );
   }
 
+  const stats = [
+    { label: 'Streak', value: `${profile.streak || 0} Days`, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
+    { label: 'Level', value: profile.level || 1, icon: Award, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+    { label: 'Life Score', value: profile.lifeScore || 50, icon: Target, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20' },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-gray-900 transition-colors duration-300">
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-gray-900 pb-12">
       {/* Header */}
-      <div className="relative h-48 bg-gradient-to-br from-orange-400 to-orange-600">
+      <div className="relative h-48 bg-gradient-to-br from-orange-400 to-orange-600 overflow-hidden">
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/hexellence.png")' }} />
         <button 
-          onClick={() => navigate(-1)} 
-          className="absolute top-12 left-6 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-all z-10"
+          onClick={() => navigate(-1)}
+          className="absolute top-6 left-6 p-3 bg-white/20 backdrop-blur-md rounded-2xl text-white hover:bg-white/30 transition-colors z-10"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
       </div>
 
       {/* Profile Info */}
-      <div className="px-6 -mt-16 pb-32">
-        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full -mr-16 -mt-16" />
-          
+      <div className="px-6 -mt-16 relative z-10">
+        <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-xl shadow-orange-900/5 p-8 border border-gray-100 dark:border-gray-700">
           <div className="flex flex-col items-center text-center">
-            <div className="relative">
-              <div className="w-32 h-32 rounded-full bg-white dark:bg-gray-700 p-1 shadow-lg">
-                <div className="w-full h-full rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden">
-                  <img src={getAvatarUrl(profile)} alt="Avatar" className="w-full h-full object-cover" />
-                </div>
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="w-32 h-32 rounded-[2rem] bg-orange-100 dark:bg-orange-900/30 p-1 mb-6 shadow-2xl shadow-orange-500/20"
+            >
+              <div className="w-full h-full rounded-[1.8rem] overflow-hidden border-4 border-white dark:border-gray-800">
+                <img src={getAvatarUrl(profile)} alt="Avatar" className="w-full h-full object-cover" />
               </div>
-              {profile.isOnline && (
-                <div className="absolute bottom-2 right-2 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-800 rounded-full shadow-sm"></div>
-              )}
-            </div>
+            </motion.div>
 
-            <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">{profile.name}</h1>
-            <p className="text-orange-500 font-medium">@{profile.username}</p>
-            
-            <div className="flex items-center gap-2 mt-2 px-3 py-1 bg-orange-50 dark:bg-orange-900/20 rounded-full">
-              <Star className="w-4 h-4 text-orange-500 fill-orange-500" />
-              <span className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Level {profile.level || 1}</span>
-            </div>
-          </div>
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white mb-1 tracking-tight">{profile.name}</h1>
+            <p className="text-orange-500 font-bold text-sm mb-6 tracking-wide uppercase">@{profile.username || 'user'}</p>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 gap-4 mt-8">
-            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-500">
-                <Zap className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase">XP Points</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">{profile.xp || 0}</p>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase">Streak</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">{profile.streak || 0} Days</p>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-500">
-                <Heart className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase">Life Score</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">{profile.lifeScore || 0}</p>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-2xl flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center text-yellow-500">
-                <Trophy className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase">Rank</p>
-                <div className="flex items-center gap-1">
-                  {loadingRank ? (
-                    <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
-                  ) : (
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{rank !== null ? `#${rank}` : '---'}</p>
-                  )}
-                </div>
-              </div>
+            <div className="flex gap-3 w-full">
+              <button 
+                onClick={() => navigate(`/chat/${profile.uid}`)}
+                className="flex-1 flex items-center justify-center gap-2 py-4 bg-orange-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-all active:scale-95"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Message
+              </button>
             </div>
           </div>
-        </div>
 
-        {/* About Section */}
-        <div className="mt-6 bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <UserIcon className="w-4 h-4 text-orange-500" />
-            About
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-            Joined NEURIX on {profile.createdAt?.toDate ? profile.createdAt.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : 'recently'}. 
-            Currently at Level {profile.level || 1} with {profile.xp || 0} XP and a {profile.streak || 0} day streak.
-          </p>
+          <div className="grid grid-cols-3 gap-3 mt-10">
+            {stats.map((stat, idx) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className={`${stat.bg} p-4 rounded-3xl border border-white/50 dark:border-gray-700/50 flex flex-col items-center text-center`}
+              >
+                <div className={`p-2 rounded-2xl bg-white dark:bg-gray-800 shadow-sm mb-2 ${stat.color}`}>
+                  <stat.icon className="w-5 h-5" />
+                </div>
+                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">{stat.label}</span>
+                <span className="text-sm font-black text-gray-900 dark:text-white">{stat.value}</span>
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-white dark:bg-gray-800 rounded-3xl p-5 mt-4 border border-gray-100 dark:border-gray-700 flex items-center justify-between shadow-sm"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-500 rounded-2xl flex items-center justify-center">
+                <Trophy className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Friend Rank</p>
+                <p className="text-lg font-black text-gray-900 dark:text-white">#{rank || '--'}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total XP</p>
+              <p className="font-bold text-orange-500">{profile.xp || 0} XP</p>
+            </div>
+          </motion.div>
+
+          <div className="mt-10 pt-10 border-t border-gray-100 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">About</h3>
+            <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-8">
+              {profile.name} joined on {profile.createdAt?.toDate ? profile.createdAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'recently'} and is currently at level {profile.level || 1} with {profile.xp || 0} XP.
+            </p>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center text-gray-400">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Member Since</p>
+                <p className="font-bold text-gray-900 dark:text-white">
+                  {profile.createdAt?.toDate ? profile.createdAt.toDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center text-gray-400">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</p>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${profile.isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                  <p className="font-bold text-gray-900 dark:text-white">{profile.isOnline ? 'Online' : 'Offline'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
