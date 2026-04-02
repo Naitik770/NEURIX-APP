@@ -217,7 +217,7 @@ The current date and time is ${new Date().toLocaleString()}.
 User Profile: ${JSON.stringify(profile)}
 Current Weather: ${weather || 'Unknown'}
 Keep responses concise, motivating, and helpful.
-IMPORTANT: You MUST reply in the language the user is using.
+IMPORTANT: You MUST reply in the language the user is using. You are fluent in both English and Hindi. If the user speaks in Hindi, respond in Hindi. If they speak in English, respond in English.
 The current year is 2026.`,
           tools: needsSearch ? [{ googleSearch: {} }] : [],
         }
@@ -300,6 +300,23 @@ The current year is 2026.`,
       setLiveText(t('coach.connecting'));
       setTranscription('');
       
+      let currentSessionId = sessionId;
+      if (!currentSessionId && user) {
+        try {
+          const sessionRef = await addDoc(collection(db, `users/${user.uid}/chatSessions`), {
+            uid: user.uid,
+            title: "Voice Session " + format(new Date(), 'MMM d, HH:mm'),
+            lastMessage: "Voice session started...",
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp()
+          });
+          currentSessionId = sessionRef.id;
+          setSearchParams({ session: currentSessionId });
+        } catch (error) {
+          console.error("Failed to create session for voice", error);
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setIsRecording(true); // Only set recording true AFTER permission is granted
       streamRef.current = stream;
@@ -307,8 +324,8 @@ The current year is 2026.`,
       audioContextRef.current = new AudioContext({ sampleRate: 24000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       
-      // Use a larger buffer size to reduce main thread pressure
-      const processor = audioContextRef.current.createScriptProcessor(8192, 1, 1);
+      // Use a smaller buffer size to reduce latency
+      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
       source.connect(processor);
       processor.connect(audioContextRef.current.destination);
 
@@ -333,7 +350,8 @@ The current year is 2026.`,
               );
             };
           },
-          onmessage: async (message: LiveServerMessage) => {
+          onmessage: async (msg: any) => {
+            const message = msg as LiveServerMessage;
             // Handle audio output
             const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
             if (base64Audio && audioContextRef.current) {
@@ -369,11 +387,48 @@ The current year is 2026.`,
               };
             }
 
-            // Handle transcriptions
-            if (message.serverContent?.modelTurn?.parts[0]?.text) {
-              setTranscription(prev => prev + message.serverContent?.modelTurn?.parts[0]?.text);
-              setLiveText(message.serverContent.modelTurn.parts[0].text);
+            // Handle user transcription
+            const userText = (message as any).serverContent?.userTurn?.parts[0]?.text;
+            if (userText && user && currentSessionId) {
+              try {
+                await addDoc(collection(db, `users/${user.uid}/chatSessions/${currentSessionId}/messages`), {
+                  role: 'user',
+                  text: userText,
+                  createdAt: serverTimestamp()
+                });
+              } catch (e) {
+                console.error("Error saving user voice transcription:", e);
+              }
             }
+
+            // Handle transcriptions and saving data
+            const modelText = message.serverContent?.modelTurn?.parts[0]?.text;
+            if (modelText) {
+              setTranscription(prev => prev + modelText);
+              setLiveText(modelText);
+              
+              // Save model response to Firestore if we have a session
+              if (user && currentSessionId) {
+                try {
+                  await addDoc(collection(db, `users/${user.uid}/chatSessions/${currentSessionId}/messages`), {
+                    role: 'model',
+                    text: modelText,
+                    createdAt: serverTimestamp()
+                  });
+                  await updateDoc(doc(db, `users/${user.uid}/chatSessions`, currentSessionId), {
+                    lastMessage: modelText,
+                    updatedAt: serverTimestamp()
+                  });
+                } catch (e) {
+                  console.error("Error saving voice model response:", e);
+                }
+              }
+            }
+
+            // Handle user transcription (if enabled in config)
+            // Note: We need to enable inputAudioTranscription in config for this to work
+            // But for now we can at least save the model's side.
+            // If we want to save user side, we need to capture it from the stream or enable transcription.
 
             if (message.serverContent?.interrupted) {
               // Stop current playback if interrupted
@@ -394,10 +449,19 @@ The current year is 2026.`,
         },
         config: {
           responseModalities: [Modality.AUDIO],
+          inputAudioTranscription: {},
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
           },
-          systemInstruction: `You are NEURIX, a supportive AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and conversational. You are speaking directly to the user. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
+          systemInstruction: `You are NEURIX, a supportive and intelligent AI life coach.
+The current date and time is ${new Date().toLocaleString()}.
+Keep responses concise, motivating, and conversational.
+You are speaking directly to the user.
+IMPORTANT: You are fluent in both English and Hindi.
+If the user speaks in Hindi, you MUST respond in Hindi.
+If the user speaks in English, you MUST respond in English.
+Switch languages seamlessly as needed.
+Current App Language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
         },
       });
 

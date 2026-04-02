@@ -6,6 +6,7 @@
       "type": "object",
       "properties": {
         "uid": { "type": "string", "description": "The user's unique ID." },
+        "username": { "type": "string", "description": "User's unique username." },
         "name": { "type": "string", "description": "User's display name." },
         "age": { "type": "number", "description": "User's age." },
         "height": { "type": "number", "description": "User's height in cm." },
@@ -103,16 +104,127 @@
         "createdAt": { "type": "timestamp", "description": "When the message was sent." }
       },
       "required": ["role", "text", "createdAt"]
+    },
+    "Username": {
+      "title": "Username",
+      "description": "Mapping of username to uid to ensure uniqueness.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user ID that owns this username." },
+        "createdAt": { "type": "timestamp", "description": "When the username was claimed." }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "A request from another user to be friends.",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string", "description": "The user ID who sent the request." },
+        "fromUsername": { "type": "string", "description": "The username of the sender." },
+        "status": { "type": "string", "description": "Status of the request (pending, accepted, rejected)." },
+        "createdAt": { "type": "timestamp", "description": "When the request was sent." }
+      },
+      "required": ["fromUid", "fromUsername", "status", "createdAt"]
+    },
+    "Friend": {
+      "title": "Friend",
+      "description": "A friend connection.",
+      "type": "object",
+      "properties": {
+        "friendUid": { "type": "string", "description": "The user ID of the friend." },
+        "friendUsername": { "type": "string", "description": "The username of the friend." },
+        "createdAt": { "type": "timestamp", "description": "When the friendship was established." }
+      },
+      "required": ["friendUid", "friendUsername", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification message for the user.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the notification." },
+        "message": { "type": "string", "description": "Message content." },
+        "type": { "type": "string", "description": "Type of notification (e.g., friend_request, friend_accepted)." },
+        "relatedUid": { "type": "string", "description": "Related user ID if applicable." },
+        "read": { "type": "boolean", "description": "Whether the notification has been read." },
+        "createdAt": { "type": "timestamp", "description": "When the notification was created." }
+      },
+      "required": ["title", "message", "type", "read", "createdAt"]
+    },
+    "DirectMessage": {
+      "title": "DirectMessage",
+      "description": "A direct message between two users.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "description": "The user ID of the sender." },
+        "text": { "type": "string", "description": "The message content." },
+        "attachment": { "type": "object", "description": "Optional media attachment." },
+        "replyTo": { "type": "object", "description": "Optional reference to a replied message." },
+        "isEdited": { "type": "boolean", "description": "Whether the message was edited." },
+        "createdAt": { "type": "timestamp", "description": "When the message was sent." }
+      },
+      "required": ["senderId", "createdAt"]
+    },
+    "HabitCompletion": {
+      "title": "HabitCompletion",
+      "description": "A record of a habit completion for analytics.",
+      "type": "object",
+      "properties": {
+        "habitId": { "type": "string", "description": "The ID of the habit completed." },
+        "completedAt": { "type": "timestamp", "description": "When the habit was completed." },
+        "date": { "type": "string", "description": "The date of completion (yyyy-MM-dd)." }
+      },
+      "required": ["habitId", "completedAt", "date"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Public user profile data.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID." },
+        "username": { "type": "string", "description": "User's unique username." },
+        "name": { "type": "string", "description": "User's display name." },
+        "avatarSeed": { "type": "string", "description": "User's avatar seed." },
+        "xp": { "type": "number", "description": "Total XP earned." },
+        "level": { "type": "number", "description": "Current level." },
+        "streak": { "type": "number", "description": "Current day streak." },
+        "lifeScore": { "type": "number", "description": "Overall life score (0-100)." },
+        "isOnline": { "type": "boolean", "description": "Whether the user is currently online." },
+        "lastActive": { "type": "timestamp", "description": "When the user was last active." },
+        "createdAt": { "type": "timestamp", "description": "When the profile was created." }
+      },
+      "required": ["uid", "name", "createdAt"]
     }
   },
   "firestore": {
+    "/usernames/{username}": {
+      "schema": { "$ref": "#/entities/Username" },
+      "description": "Username to UID mapping."
+    },
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "User profiles."
     },
+    "/users/{userId}/friendRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/FriendRequest" },
+      "description": "User's friend requests."
+    },
+    "/users/{userId}/friends/{friendId}": {
+      "schema": { "$ref": "#/entities/Friend" },
+      "description": "User's friends."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User's notifications."
+    },
     "/users/{userId}/habits/{habitId}": {
       "schema": { "$ref": "#/entities/Habit" },
       "description": "User's habits."
+    },
+    "/users/{userId}/habitCompletions/{completionId}": {
+      "schema": { "$ref": "#/entities/HabitCompletion" },
+      "description": "User's habit completion history."
     },
     "/users/{userId}/gameSessions/{sessionId}": {
       "schema": { "$ref": "#/entities/GameSession" },
@@ -133,6 +245,28 @@
     "/users/{userId}/chatSessions/{sessionId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/ChatMessage" },
       "description": "Messages within a chat session."
+    },
+    "/chats/{chatId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "participants": { "type": "array", "items": { "type": "string" } },
+          "lastMessage": { "type": "string" },
+          "lastMessageAt": { "type": "timestamp" },
+          "updatedAt": { "type": "timestamp" },
+          "typing": { "type": "object" },
+          "nicknames": { "type": "object", "description": "Nicknames for participants, keyed by UID." }
+        }
+      },
+      "description": "Direct chat metadata between two users."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DirectMessage" },
+      "description": "Direct messages between two users."
+    },
+    "/publicProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Public user profiles."
     }
   }
 }

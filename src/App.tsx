@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import React, { useEffect, useState, createContext, useContext } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, query, onSnapshot, updateDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BottomNav } from './components/BottomNav';
@@ -17,11 +17,17 @@ import DailyRoutine from './pages/DailyRoutine';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Reminders from './pages/Reminders';
+import Messages from './pages/Messages';
+import Chat from './pages/Chat';
+import FriendProfile from './pages/FriendProfile';
+import Leaderboard from './pages/Leaderboard';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import ForgotPassword from './pages/ForgotPassword';
 import Personalization from './pages/Personalization';
 import ChatHistory from './pages/ChatHistory';
+import CreateUsername from './pages/CreateUsername';
+import VerifyEmail from './pages/VerifyEmail';
 
 interface AuthContextType {
   user: User | null;
@@ -29,9 +35,17 @@ interface AuthContextType {
   profile: any | null;
   theme: string;
   setTheme: (theme: string) => void;
+  checkVerification: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true, profile: null, theme: 'light', setTheme: () => {} });
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
+  loading: true, 
+  profile: null, 
+  theme: 'light', 
+  setTheme: () => {},
+  checkVerification: async () => {}
+});
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -73,33 +87,18 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         const userRef = doc(db, 'users', firebaseUser.uid);
         
         // Use onSnapshot for real-time profile updates
-        unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
+        unsubscribeProfile = onSnapshot(userRef, async (docSnap) => {
           if (docSnap.exists()) {
             setProfile(docSnap.data());
+            setLoading(false);
           } else {
-            // Create profile if it doesn't exist (e.g., first social login)
-            const newProfile: any = {
-              uid: firebaseUser.uid,
-              name: firebaseUser.displayName || 'User',
-              xp: 0,
-              level: 1,
-              streak: 0,
-              lifeScore: 50,
-              role: 'user',
-              createdAt: serverTimestamp(),
-            };
-            if (firebaseUser.email) {
-              newProfile.email = firebaseUser.email;
+            setProfile(null);
+            // If user is verified, createProfileIfMissing will handle loading state
+            const isVerified = firebaseUser.emailVerified || firebaseUser.providerData[0]?.providerId === 'google.com';
+            if (!isVerified) {
+              setLoading(false);
             }
-            setDoc(userRef, newProfile).catch(error => {
-              // Ignore permission errors here, as SignUp.tsx might have already created the profile
-              // and this setDoc would be treated as an invalid update (modifying createdAt)
-              if (error.code !== 'permission-denied') {
-                handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
-              }
-            });
           }
-          setLoading(false);
         }, (error) => {
           handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
           setLoading(false);
@@ -115,6 +114,182 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       if (unsubscribeProfile) unsubscribeProfile();
     };
   }, []);
+
+  // Sync public profile with user profile
+  useEffect(() => {
+    if (!user || !profile) return;
+    const syncPublicProfile = async () => {
+      const publicProfileRef = doc(db, 'publicProfiles', user.uid);
+      try {
+        await setDoc(publicProfileRef, {
+          uid: user.uid,
+          name: profile.name,
+          username: profile.username,
+          avatarSeed: profile.avatarSeed || profile.name,
+          avatarStyle: profile.avatarStyle || 'avataaars',
+          avatarColor: profile.avatarColor || 'transparent',
+          xp: profile.xp || 0,
+          level: profile.level || 1,
+          streak: profile.streak || 0,
+          lifeScore: profile.lifeScore || 50,
+          isOnline: true,
+          lastActive: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (error) {
+        console.error("Error syncing public profile:", error);
+      }
+    };
+    syncPublicProfile();
+  }, [user, profile]);
+
+  const checkVerification = async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true); // Force token refresh
+      setUser({ ...auth.currentUser });
+    }
+  };
+
+  // Profile creation logic
+  useEffect(() => {
+    if (!user) return;
+
+    const createProfileIfMissing = async () => {
+      if (profile) return; // Profile already exists
+      
+      const isVerified = user.emailVerified || user.providerData[0]?.providerId === 'google.com';
+      if (!isVerified) return;
+
+      const userRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userRef);
+      
+      if (!docSnap.exists()) {
+        setLoading(true);
+        // Check for pending profile data first
+        const pendingRef = doc(db, 'pendingProfiles', user.uid);
+        const pendingSnap = await getDoc(pendingRef);
+        const pendingData = pendingSnap.exists() ? pendingSnap.data() : null;
+
+        const name = pendingData?.name || user.displayName || 'User';
+        const username = pendingData?.username || null;
+        const email = pendingData?.email || user.email || '';
+
+        const newProfile: any = {
+          uid: user.uid,
+          name: name,
+          username: username,
+          avatarSeed: name || 'Aneka',
+          avatarStyle: 'avataaars',
+          avatarColor: 'transparent',
+          xp: 0,
+          level: 1,
+          streak: 0,
+          lifeScore: 50,
+          role: 'user',
+          createdAt: serverTimestamp(),
+        };
+        if (email) {
+          newProfile.email = email;
+        }
+
+        try {
+          // 1. Create main profile
+          await setDoc(userRef, newProfile, { merge: true });
+          
+          // 2. Create public profile
+          const publicProfileRef = doc(db, 'publicProfiles', user.uid);
+          await setDoc(publicProfileRef, {
+            uid: user.uid,
+            name: name,
+            username: username,
+            avatarSeed: name || 'Aneka',
+            avatarStyle: 'avataaars',
+            avatarColor: 'transparent',
+            xp: 0,
+            level: 1,
+            streak: 0,
+            lifeScore: 50,
+            isOnline: true,
+            lastActive: serverTimestamp(),
+            createdAt: serverTimestamp()
+          }, { merge: true });
+
+          // 3. Claim username if available (remove pending flag)
+          if (username) {
+            const usernameRef = doc(db, 'usernames', username.toLowerCase());
+            await setDoc(usernameRef, {
+              uid: user.uid,
+              createdAt: serverTimestamp(),
+              pending: false
+            }, { merge: true });
+          }
+
+          // 4. Delete pending profile
+          if (pendingSnap.exists()) {
+            await deleteDoc(pendingRef);
+          }
+        } catch (error: any) {
+          if (error.code !== 'permission-denied') {
+            handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+          } else {
+            console.warn('Permission denied during profile creation. Token might be stale.');
+          }
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    createProfileIfMissing();
+  }, [user, user?.emailVerified, profile]);
+
+  // Global Presence Logic
+  useEffect(() => {
+    if (!user || !profile) return;
+
+    const publicProfileRef = doc(db, 'publicProfiles', user.uid);
+
+    const setOnline = () => {
+      updateDoc(publicProfileRef, { isOnline: true, lastActive: serverTimestamp() }).catch(() => {});
+    };
+
+    const setOffline = () => {
+      updateDoc(publicProfileRef, { isOnline: false, lastActive: serverTimestamp() }).catch(() => {});
+    };
+
+    // Initial set
+    setOnline();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setOnline();
+      } else {
+        setOffline();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      setOffline();
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Heartbeat just in case
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        setOnline();
+      }
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      clearInterval(interval);
+      setOffline();
+    };
+  }, [user, profile]);
 
   // Sync reminders
   useEffect(() => {
@@ -277,7 +452,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, reminders]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, profile, theme, setTheme }}>
+    <AuthContext.Provider value={{ user, loading, profile, theme, setTheme, checkVerification }}>
       {children}
       <Toaster position="top-center" richColors closeButton />
     </AuthContext.Provider>
@@ -291,10 +466,29 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="flex h-screen items-center justify-center bg-[#FDFBF7]">Loading...</div>;
   if (!user) return <Navigate to="/login" />;
 
+  // Enforce email verification
+  if (!user.emailVerified && user.providerData[0]?.providerId === 'password') {
+    return <Navigate to="/verify-email" />;
+  }
+
+  // Check if username is set (mandatory for all users)
+  const hasUsername = profile && profile.username;
+  if (!hasUsername && location.pathname !== '/create-username') {
+    // If profile is null, we might be in the middle of creating it (verified users)
+    if (!profile && user?.emailVerified) {
+      return <div className="flex h-screen items-center justify-center bg-[#FDFBF7]">Finalizing your profile...</div>;
+    }
+    return <Navigate to="/create-username" />;
+  }
+
+  if (hasUsername && location.pathname === '/create-username') {
+    return <Navigate to="/" />;
+  }
+
   // Check if profile is complete (e.g., has age set)
   const isProfileComplete = profile && profile.age !== undefined;
 
-  if (!isProfileComplete && location.pathname !== '/personalization') {
+  if (hasUsername && !isProfileComplete && location.pathname !== '/personalization') {
     return <Navigate to="/personalization" />;
   }
 
@@ -306,10 +500,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const isChatPage = location.pathname.startsWith('/chat/');
+
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-gray-900 pb-24 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300">
-      {children}
-      <BottomNav />
+    <div className={`min-h-screen bg-[#FDFBF7] dark:bg-gray-900 ${isChatPage ? 'pb-0' : 'pb-24'} font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative`}>
+      <div className="relative z-10">
+        {children}
+      </div>
+      {!isChatPage && <BottomNav />}
     </div>
   );
 }
@@ -323,6 +522,8 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/create-username" element={<ProtectedRoute><CreateUsername /></ProtectedRoute>} />
             <Route path="/personalization" element={<ProtectedRoute><Personalization /></ProtectedRoute>} />
             <Route path="/" element={<ProtectedRoute><Layout><Home /></Layout></ProtectedRoute>} />
             <Route path="/coach" element={<ProtectedRoute><Layout><Coach /></Layout></ProtectedRoute>} />
@@ -331,6 +532,10 @@ export default function App() {
             <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
             <Route path="/daily-routine" element={<ProtectedRoute><Layout><DailyRoutine /></Layout></ProtectedRoute>} />
             <Route path="/reminders" element={<ProtectedRoute><Layout><Reminders /></Layout></ProtectedRoute>} />
+            <Route path="/messages" element={<ProtectedRoute><Layout><Messages /></Layout></ProtectedRoute>} />
+            <Route path="/chat/:friendId" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
+            <Route path="/friend-profile/:friendId" element={<ProtectedRoute><Layout><FriendProfile /></Layout></ProtectedRoute>} />
+            <Route path="/leaderboard" element={<ProtectedRoute><Layout><Leaderboard /></Layout></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           </Routes>

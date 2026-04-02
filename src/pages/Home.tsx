@@ -1,13 +1,109 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth, getAvatarUrl } from '../App';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { Bell, Plus, Check, Clock, Droplet, Wind, Activity, Footprints, Play, Pause, RotateCcw, X, Trash2, Edit2, Book, Moon, Coffee, Dumbbell, Brain, Heart, Music, Utensils, Sun, Timer, Pencil } from 'lucide-react';
+import { Bell, Plus, Check, Clock, Droplet, Wind, Activity, Footprints, Play, Pause, RotateCcw, X, Trash2, Edit2, Book, Moon, Coffee, Dumbbell, Brain, Heart, Music, Utensils, Sun, Timer, Pencil, Flame, Trophy, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import confetti from 'canvas-confetti';
 import { HABIT_ICONS as icons } from '../constants';
+
+// Particle Burst for completion
+const ParticleBurst = ({ active }: { active: boolean }) => {
+  if (!active) return null;
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {[...Array(12)].map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
+          animate={{ 
+            scale: [0, 1, 0],
+            x: (Math.random() - 0.5) * 100,
+            y: (Math.random() - 0.5) * 100,
+            opacity: 0
+          }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="absolute left-1/2 top-1/2 w-1 h-1 bg-orange-400 rounded-full"
+        />
+      ))}
+    </div>
+  );
+};
+
+
+// Focus Mode Component
+const FocusMode = ({ habit, timeLeft, isRunning, onToggle, onClose, onComplete }: any) => {
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] bg-gray-900 flex flex-col items-center justify-center p-8 text-white"
+    >
+      
+      <motion.button 
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={onClose}
+        className="absolute top-8 right-8 w-12 h-12 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10"
+      >
+        <X className="w-6 h-6" />
+      </motion.button>
+
+      <div className="text-center relative z-10">
+        <motion.div
+          animate={{ scale: isRunning ? [1, 1.05, 1] : 1 }}
+          transition={{ duration: 4, repeat: Infinity }}
+          className="w-48 h-48 rounded-full border-4 border-orange-500/30 flex items-center justify-center mb-12 relative"
+        >
+          <div className="absolute inset-0 rounded-full border-4 border-orange-500 border-t-transparent animate-spin" style={{ animationDuration: '10s' }} />
+          <span className="text-6xl font-black font-mono tracking-tighter">{formatTime(timeLeft)}</span>
+        </motion.div>
+
+        <h2 className="text-3xl font-black mb-2 uppercase tracking-tight">{habit.title}</h2>
+        <p className="text-orange-400 font-bold uppercase tracking-[0.3em] text-xs mb-12">Deep Focus Session</p>
+
+        <div className="flex gap-6">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={onToggle}
+            className="w-20 h-20 rounded-full bg-white text-gray-900 flex items-center justify-center shadow-2xl"
+          >
+            {isRunning ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
+          </motion.button>
+          
+          {timeLeft === 0 && (
+            <motion.button
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              onClick={onComplete}
+              className="w-20 h-20 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-2xl"
+            >
+              <Check className="w-8 h-8 stroke-[3]" />
+            </motion.button>
+          )}
+        </div>
+      </div>
+
+      <div className="absolute bottom-12 left-0 right-0 px-12">
+        <p className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+          "The successful warrior is the average man, with laser-like focus."
+        </p>
+      </div>
+    </motion.div>
+  );
+};
 
 export default function Home() {
   const { user, profile } = useAuth();
@@ -18,9 +114,40 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<any | null>(null);
   const [newTaskDuration, setNewTaskDuration] = useState('');
   const [newTaskIcon, setNewTaskIcon] = useState('check');
+  const [showReminder, setShowReminder] = useState(true);
+
+  // Level Up Check
+  useEffect(() => {
+    if (!profile?.xp || !user) return;
+    const nextLevelXp = (profile.level || 1) * 100;
+    if (profile.xp >= nextLevelXp) {
+      const upgradeLevel = async () => {
+        try {
+          await updateDoc(doc(db, `users/${user.uid}`), {
+            level: (profile.level || 1) + 1,
+            xp: profile.xp - nextLevelXp
+          });
+          setShowLevelUp(true);
+          confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#fb923c', '#f97316', '#ea580c']
+          });
+        } catch (e) {
+          console.error("Level up error", e);
+        }
+      };
+      upgradeLevel();
+    }
+  }, [profile?.xp, profile?.level, user]);
+
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -55,7 +182,8 @@ export default function Home() {
     setShowVerification(habitId);
   };
 
-  const [weeklyActivity, setWeeklyActivity] = useState<number[]>(new Array(7).fill(0));
+  const [rawSessions, setRawSessions] = useState<any[]>([]);
+  const [rawCompletions, setRawCompletions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -64,59 +192,49 @@ export default function Home() {
     const qGames = query(collection(db, `users/${user.uid}/gameSessions`));
     const qHabits = query(collection(db, `users/${user.uid}/habitCompletions`));
     
-    const activity = new Array(7).fill(0);
-    const today = new Date();
-    
     const unsubscribeGames = onSnapshot(qGames, (snapshot) => {
-      const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const newActivity = new Array(7).fill(0);
-      
-      // Process Games
-      sessions.forEach((s: any) => {
-        if (s.playedAt) {
-          const date = s.playedAt.toDate();
-          const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays >= 0 && diffDays < 7) {
-            const dayIndex = (date.getDay() + 6) % 7;
-            newActivity[dayIndex] += 15; // Each game adds 15%
-          }
-        }
-      });
-
-      // We need to fetch habits too, but onSnapshot for both might be tricky to sync perfectly.
-      // Let's just update state when either changes.
-      setWeeklyActivity(prev => {
-        const combined = [...newActivity];
-        // We'll handle habits separately or use a combined listener if possible.
-        // For simplicity, let's just use the latest game data and add habit data if we have it.
-        return combined.map(v => Math.min(100, v));
-      });
-    });
+      setRawSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/gameSessions`));
 
     const unsubscribeHabits = onSnapshot(qHabits, (snapshot) => {
-      const completions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      setWeeklyActivity(prev => {
-        const updated = [...prev];
-        completions.forEach((c: any) => {
-          if (c.completedAt) {
-            const date = c.completedAt.toDate();
-            const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-            if (diffDays >= 0 && diffDays < 7) {
-              const dayIndex = (date.getDay() + 6) % 7;
-              updated[dayIndex] += 10; // Each habit adds 10%
-            }
-          }
-        });
-        return updated.map(v => Math.min(100, v));
-      });
-    });
+      setRawCompletions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/habitCompletions`));
 
     return () => {
       unsubscribeGames();
       unsubscribeHabits();
     };
   }, [user]);
+
+  const weeklyActivity = useMemo(() => {
+    const activity = new Array(7).fill(0);
+    const today = new Date();
+    const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
+    
+    // Process Games
+    rawSessions.forEach((s: any) => {
+      if (s.playedAt) {
+        const date = s.playedAt.toDate();
+        if (date >= startOfCurrentWeek) {
+          const dayIndex = (date.getDay() + 6) % 7;
+          activity[dayIndex] += 15; // Each game adds 15%
+        }
+      }
+    });
+
+    // Process Habits
+    rawCompletions.forEach((c: any) => {
+      if (c.completedAt) {
+        const date = c.completedAt.toDate();
+        if (date >= startOfCurrentWeek) {
+          const dayIndex = (date.getDay() + 6) % 7;
+          activity[dayIndex] += 10; // Each habit adds 10%
+        }
+      }
+    });
+
+    return activity.map(v => Math.min(100, v));
+  }, [rawSessions, rawCompletions]);
 
   const confirmCompletion = async (habitId: string, confirmed: boolean) => {
     setShowVerification(null);
@@ -146,12 +264,25 @@ export default function Home() {
       await updateDoc(userRef, {
         xp: (profile?.xp || 0) + 10
       });
+
+      confetti({
+        particleCount: 40,
+        spread: 50,
+        origin: { y: 0.8 },
+        colors: ['#fb923c', '#f97316']
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${user?.uid}/habits/${habitId}`);
     }
   };
 
-  const [editingHabit, setEditingHabit] = useState<any | null>(null);
+
+  const startFocusMode = (habit: any) => {
+    setActiveTimerHabit(habit);
+    setTimeLeft((habit.durationMins || 25) * 60);
+    setIsTimerRunning(true);
+    setIsFocusMode(true);
+  };
 
   const handleEditTask = async () => {
     if (!user || !editingHabit || !newTaskTitle.trim()) return;
@@ -230,7 +361,6 @@ export default function Home() {
 
   const [reminders, setReminders] = useState<any[]>([]);
   const [showAddReminderModal, setShowAddReminderModal] = useState(false);
-  const [showReminder, setShowReminder] = useState(true);
   const [newReminderTitle, setNewReminderTitle] = useState('');
   const [newReminderTime, setNewReminderTime] = useState('');
 
@@ -305,17 +435,51 @@ export default function Home() {
 
   return (
     <div className="p-6 pt-12 min-h-screen relative bg-[#FDFBF7] dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300 overflow-y-auto">
+      {/* Focus Mode Overlay */}
+      <AnimatePresence>
+        {isFocusMode && activeTimerHabit && (
+          <FocusMode 
+            habit={activeTimerHabit}
+            timeLeft={timeLeft}
+            isRunning={isTimerRunning}
+            onToggle={() => setIsTimerRunning(!isTimerRunning)}
+            onClose={() => {
+              setIsFocusMode(false);
+              setIsTimerRunning(false);
+            }}
+            onComplete={() => {
+              confirmCompletion(activeTimerHabit.id, true);
+              setIsFocusMode(false);
+              setIsTimerRunning(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       <header className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-1">
-            {getGreeting()}, {profile?.name?.split(' ')[0] || 'User'}
-          </h1>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
+              {getGreeting()}, {profile?.name?.split(' ')[0] || 'User'}
+            </h1>
+          </div>
           <p className="text-gray-500 dark:text-gray-400 text-sm">{format(today, 'EEEE, d MMMM, yyyy')}</p>
         </div>
-        <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm transition-colors duration-300">
-          <img src={getAvatarUrl(profile, user)} alt="Avatar" className="w-full h-full object-cover" />
+        <div className="flex items-center gap-3">
+          <Link
+            to="/messages"
+            className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-orange-500 dark:hover:text-orange-400 transition-colors relative"
+          >
+            <Users className="w-5 h-5" />
+            {/* TODO: Add notification badge logic here */}
+          </Link>
+          <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm transition-colors duration-300">
+            <img src={getAvatarUrl(profile, user)} alt="Avatar" className="w-full h-full object-cover" />
+          </div>
         </div>
       </header>
+
+
 
       {/* Reminder Card */}
       <AnimatePresence>
@@ -375,7 +539,7 @@ export default function Home() {
           <div className="flex justify-between items-end h-24 gap-2">
             {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
               const isToday = i === (new Date().getDay() + 6) % 7;
-              const height = weeklyActivity[i] || 5; // Use real data, min 5%
+              const height = weeklyActivity[i] || 0; // Use real data, no min height to avoid confusion
               return (
                 <div key={i} className="flex-1 flex flex-col items-center gap-2">
                   <div className="w-full bg-gray-50 dark:bg-gray-700 rounded-full h-16 relative overflow-hidden flex flex-col justify-end transition-colors duration-300">
@@ -392,6 +556,9 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+
+
 
       {/* Daily Routine */}
       <div className="flex justify-between items-end mb-4">
@@ -426,14 +593,16 @@ export default function Home() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               key={habit.id} 
-              className="bg-white dark:bg-gray-800 rounded-2xl p-4 flex items-center gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] relative group border border-transparent dark:border-gray-700 transition-colors duration-300"
+              className="bg-white dark:bg-gray-800 rounded-3xl p-5 flex items-center gap-4 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative group border border-transparent dark:border-gray-700 overflow-hidden"
             >
+              <ParticleBurst active={habit.lastCompleted === new Date().toISOString().split('T')[0]} />
+              
               <motion.button 
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => handleComplete(habit.id)}
                 disabled={habit.lastCompleted === new Date().toISOString().split('T')[0]}
-                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center bg-white dark:bg-gray-800 transition-all shrink-0 ${habit.lastCompleted === new Date().toISOString().split('T')[0] ? 'border-orange-500 bg-orange-500 text-white cursor-not-allowed' : 'border-gray-200 dark:border-gray-600 text-transparent hover:border-orange-400 dark:hover:border-orange-500'}`}
+                className={`w-8 h-8 rounded-full border-2 flex items-center justify-center bg-white dark:bg-gray-800 transition-all shrink-0 relative z-10 ${habit.lastCompleted === new Date().toISOString().split('T')[0] ? 'border-orange-500 bg-orange-500 text-white cursor-not-allowed' : 'border-gray-200 dark:border-gray-600 text-transparent hover:border-orange-400 dark:hover:border-orange-500'}`}
               >
                 <motion.div
                   initial={false}
@@ -443,43 +612,50 @@ export default function Home() {
                   }}
                   transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 >
-                  <Check className="w-4 h-4" />
+                  <Check className="w-5 h-5 stroke-[3]" />
                 </motion.div>
               </motion.button>
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${habit.bg || 'bg-gray-100 dark:bg-gray-700'} ${habit.color || 'text-gray-500 dark:text-gray-400'}`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner relative z-10 ${habit.bg || 'bg-gray-100 dark:bg-gray-700'} ${habit.color || 'text-gray-500 dark:text-gray-400'}`}>
                 {getIcon(habit.icon)}
               </div>
-              <div className="flex-1 min-w-0 pr-2">
-                <h3 className={`text-gray-900 dark:text-white font-medium truncate ${habit.lastCompleted === new Date().toISOString().split('T')[0] ? 'opacity-50 line-through' : ''}`}>{habit.title}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Streak {habit.streak} days</p>
+              <div className="flex-1 min-w-0 pr-2 relative z-10">
+                <h3 className={`text-gray-900 dark:text-white font-bold truncate text-lg tracking-tight ${habit.lastCompleted === new Date().toISOString().split('T')[0] ? 'opacity-40 line-through' : ''}`}>{habit.title}</h3>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Streak</span>
+                  <span className="text-xs font-bold text-orange-500">{habit.streak}d</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 relative z-10">
                 {habit.lastCompleted === new Date().toISOString().split('T')[0] && (
-                  <span className="text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-full uppercase">Completed</span>
+                  <motion.div 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center"
+                  >
+                    <Flame className="w-5 h-5 text-orange-500 fill-current" />
+                  </motion.div>
                 )}
                 {habit.durationMins && habit.lastCompleted !== new Date().toISOString().split('T')[0] && (
-                  <button 
-                    onClick={() => {
-                      setActiveTimerHabit(habit);
-                      setTimeLeft(habit.durationMins * 60);
-                      setIsTimerRunning(false);
-                    }}
-                    className="flex flex-col items-center justify-center gap-1 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/40 w-12 h-12 rounded-xl transition-colors shrink-0"
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => startFocusMode(habit)}
+                    className="flex flex-col items-center justify-center gap-1 bg-gray-900 dark:bg-white text-white dark:text-gray-900 w-14 h-14 rounded-2xl shadow-lg transition-all shrink-0 group/focus"
                   >
-                    <Play className="w-4 h-4 text-orange-500 ml-0.5" />
-                    <span className="text-[10px] text-orange-600 dark:text-orange-400 font-bold">{habit.durationMins}m</span>
-                  </button>
+                    <Play className="w-5 h-5 fill-current ml-0.5 group-hover/focus:scale-110 transition-transform" />
+                    <span className="text-[10px] font-black">{habit.durationMins}M</span>
+                  </motion.button>
                 )}
                 <div className="flex flex-col gap-1">
                   <button
                     onClick={() => openEditModal(habit)}
-                    className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                    className="p-2 text-gray-300 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDeleteTask(habit.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -732,6 +908,56 @@ export default function Home() {
               >
                 {t('home.setReminderBtn', 'Set Reminder')}
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Level Up Modal */}
+      <AnimatePresence>
+        {showLevelUp && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.5, opacity: 0, rotate: 10 }}
+              className="bg-white dark:bg-gray-800 rounded-[3rem] p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden"
+            >
+              {/* Confetti-like background elements */}
+              <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+                {[...Array(12)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ 
+                      y: [-20, 400],
+                      x: [Math.random() * 300 - 150, Math.random() * 300 - 150],
+                      rotate: [0, 360]
+                    }}
+                    transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, ease: "linear" }}
+                    className="absolute w-2 h-2 bg-orange-500 rounded-sm opacity-50"
+                    style={{ left: `${Math.random() * 100}%`, top: -20 }}
+                  />
+                ))}
+              </div>
+
+              <div className="relative z-10">
+                <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-orange-500/40">
+                  <Trophy className="w-12 h-12 text-white fill-current" />
+                </div>
+                <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2 uppercase tracking-tighter">Level Up!</h2>
+                <div className="flex items-center justify-center gap-2 mb-6">
+                  <span className="text-gray-400 text-lg font-medium">Level</span>
+                  <span className="text-5xl font-black text-orange-500">{profile?.level}</span>
+                </div>
+                <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                  You've unlocked new potential and mental clarity.
+                </p>
+                <button
+                  onClick={() => setShowLevelUp(false)}
+                  className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl font-bold text-lg hover:scale-105 active:scale-95 transition-transform shadow-xl"
+                >
+                  Keep Growing
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
