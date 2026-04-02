@@ -25,14 +25,7 @@ export default function Messages() {
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const friendsData = await Promise.all(snapshot.docs.map(async (d) => {
         const friendDoc = await getDoc(doc(db, 'publicProfiles', d.id));
-        const chatId = [user.uid, d.id].sort().join('_');
-        const chatDoc = await getDoc(doc(db, 'chats', chatId));
-        const chatData = chatDoc.exists() ? chatDoc.data() : null;
-        return { 
-          id: d.id, 
-          ...friendDoc.data(),
-          nickname: chatData?.nicknames?.[d.id]
-        };
+        return { id: d.id, ...friendDoc.data() };
       }));
       setFriends(friendsData);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/friends`));
@@ -247,9 +240,7 @@ export default function Messages() {
                         <img src={getAvatarUrl(friend)} alt="Avatar" className="w-full h-full object-cover" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-orange-500 transition-colors">
-                          {friend.nickname || friend.name}
-                        </h3>
+                        <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-orange-500 transition-colors">{friend.name}</h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">@{friend.username}</p>
                       </div>
                     </div>

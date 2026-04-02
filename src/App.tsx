@@ -19,7 +19,6 @@ import Settings from './pages/Settings';
 import Reminders from './pages/Reminders';
 import Messages from './pages/Messages';
 import Chat from './pages/Chat';
-import FriendProfile from './pages/FriendProfile';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import ForgotPassword from './pages/ForgotPassword';
@@ -27,6 +26,8 @@ import Personalization from './pages/Personalization';
 import ChatHistory from './pages/ChatHistory';
 import CreateUsername from './pages/CreateUsername';
 import VerifyEmail from './pages/VerifyEmail';
+import FriendProfile from './pages/FriendProfile';
+import Leaderboard from './pages/Leaderboard';
 
 interface AuthContextType {
   user: User | null;
@@ -114,34 +115,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Sync public profile with user profile
-  useEffect(() => {
-    if (!user || !profile) return;
-    const syncPublicProfile = async () => {
-      const publicProfileRef = doc(db, 'publicProfiles', user.uid);
-      try {
-        await setDoc(publicProfileRef, {
-          uid: user.uid,
-          name: profile.name,
-          username: profile.username,
-          avatarSeed: profile.avatarSeed || profile.name,
-          avatarStyle: profile.avatarStyle || 'avataaars',
-          avatarColor: profile.avatarColor || 'transparent',
-          xp: profile.xp || 0,
-          level: profile.level || 1,
-          streak: profile.streak || 0,
-          lifeScore: profile.lifeScore || 50,
-          isOnline: true,
-          lastActive: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      } catch (error) {
-        console.error("Error syncing public profile:", error);
-      }
-    };
-    syncPublicProfile();
-  }, [user, profile]);
-
   const checkVerification = async () => {
     if (auth.currentUser) {
       await auth.currentUser.reload();
@@ -201,6 +174,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           await setDoc(publicProfileRef, {
             uid: user.uid,
             name: name,
+            searchName: name.toLowerCase(),
             username: username,
             avatarSeed: name || 'Aneka',
             avatarStyle: 'avataaars',
@@ -209,8 +183,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             level: 1,
             streak: 0,
             lifeScore: 50,
-            isOnline: true,
-            lastActive: serverTimestamp(),
             createdAt: serverTimestamp()
           }, { merge: true });
 
@@ -289,6 +261,24 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       setOffline();
     };
   }, [user, profile]);
+
+  // Keep PublicProfile stats in sync with private profile
+  useEffect(() => {
+    if (!user || !profile) return;
+    const publicProfileRef = doc(db, 'publicProfiles', user.uid);
+    setDoc(publicProfileRef, {
+      xp: profile.xp || 0,
+      level: profile.level || 1,
+      streak: profile.streak || 0,
+      lifeScore: profile.lifeScore || 50,
+      avatarSeed: profile.avatarSeed || profile.name || 'Aneka',
+      avatarStyle: profile.avatarStyle || 'avataaars',
+      avatarColor: profile.avatarColor || 'transparent',
+      name: profile.name,
+      searchName: profile.name?.toLowerCase() || '',
+      updatedAt: serverTimestamp()
+    }, { merge: true }).catch(() => {});
+  }, [user, profile?.xp, profile?.level, profile?.streak, profile?.lifeScore, profile?.avatarSeed, profile?.avatarStyle, profile?.avatarColor, profile?.name]);
 
   // Sync reminders
   useEffect(() => {
@@ -503,7 +493,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const isChatPage = location.pathname.startsWith('/chat/');
 
   return (
-    <div className={`min-h-screen bg-[#FDFBF7] dark:bg-gray-900 ${isChatPage ? 'pb-0' : 'pb-24'} font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative`}>
+    <div className={`min-h-screen bg-[#FDFBF7] dark:bg-gray-900 ${isChatPage ? '' : 'pb-24'} font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative`}>
       <div className="relative z-10">
         {children}
       </div>
@@ -533,7 +523,8 @@ export default function App() {
             <Route path="/reminders" element={<ProtectedRoute><Layout><Reminders /></Layout></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Layout><Messages /></Layout></ProtectedRoute>} />
             <Route path="/chat/:friendId" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
-            <Route path="/friend-profile/:friendId" element={<ProtectedRoute><Layout><FriendProfile /></Layout></ProtectedRoute>} />
+            <Route path="/friend/:friendId" element={<ProtectedRoute><Layout><FriendProfile /></Layout></ProtectedRoute>} />
+            <Route path="/leaderboard" element={<ProtectedRoute><Layout><Leaderboard /></Layout></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           </Routes>

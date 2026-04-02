@@ -186,10 +186,6 @@
         "username": { "type": "string", "description": "User's unique username." },
         "name": { "type": "string", "description": "User's display name." },
         "avatarSeed": { "type": "string", "description": "User's avatar seed." },
-        "xp": { "type": "number", "description": "Total XP earned." },
-        "level": { "type": "number", "description": "Current level." },
-        "streak": { "type": "number", "description": "Current day streak." },
-        "lifeScore": { "type": "number", "description": "Overall life score (0-100)." },
         "isOnline": { "type": "boolean", "description": "Whether the user is currently online." },
         "lastActive": { "type": "timestamp", "description": "When the user was last active." },
         "createdAt": { "type": "timestamp", "description": "When the profile was created." }
@@ -254,8 +250,7 @@
           "lastMessage": { "type": "string" },
           "lastMessageAt": { "type": "timestamp" },
           "updatedAt": { "type": "timestamp" },
-          "typing": { "type": "object" },
-          "nicknames": { "type": "object", "description": "Nicknames for participants, keyed by UID." }
+          "typing": { "type": "object" }
         }
       },
       "description": "Direct chat metadata between two users."
