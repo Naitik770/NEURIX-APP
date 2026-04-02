@@ -100,8 +100,13 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+          console.error("Firestore onSnapshot error:", error);
           setLoading(false);
+          try {
+            handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+          } catch (e) {
+            // Error is caught so it doesn't stop execution
+          }
         });
       } else {
         setProfile(null);
@@ -162,14 +167,16 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isVerified) return;
 
       const userRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(userRef);
       
-      if (!docSnap.exists()) {
-        setLoading(true);
-        // Check for pending profile data first
-        const pendingRef = doc(db, 'pendingProfiles', user.uid);
-        const pendingSnap = await getDoc(pendingRef);
-        const pendingData = pendingSnap.exists() ? pendingSnap.data() : null;
+      try {
+        const docSnap = await getDoc(userRef);
+        
+        if (!docSnap.exists()) {
+          setLoading(true);
+          // Check for pending profile data first
+          const pendingRef = doc(db, 'pendingProfiles', user.uid);
+          const pendingSnap = await getDoc(pendingRef);
+          const pendingData = pendingSnap.exists() ? pendingSnap.data() : null;
 
         const name = pendingData?.name || user.displayName || 'User';
         const username = pendingData?.username || null;
@@ -238,6 +245,10 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
           setLoading(false);
         }
+      }
+      } catch (error) {
+        console.error("Error fetching user profile during creation check:", error);
+        setLoading(false);
       }
     };
 
