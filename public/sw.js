@@ -1,4 +1,4 @@
-const CACHE_NAME = 'neurix-v1';
+const CACHE_NAME = 'neurix-v2'; // Increment version to force update
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -7,12 +7,7 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
-  self.skipWaiting();
+  self.skipWaiting(); // Force the waiting service worker to become the active service worker
 });
 
 self.addEventListener('activate', (event) => {
@@ -20,6 +15,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
+          // Delete all old caches to ensure users get the latest version
           if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
@@ -27,13 +23,14 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  self.clients.claim();
+  self.clients.claim(); // Claim clients immediately
 });
 
 self.addEventListener('fetch', (event) => {
+  // Network-first strategy for all requests to ensure the latest code is always loaded
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
     })
   );
 });

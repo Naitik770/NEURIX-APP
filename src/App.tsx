@@ -245,6 +245,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
           setLoading(false);
         }
+      } else {
+        setLoading(false);
       }
       } catch (error) {
         console.error("Error fetching user profile during creation check:", error);
@@ -524,6 +526,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Force a new commit for Netlify deployment
 export default function App() {
   return (
     <ErrorBoundary>
