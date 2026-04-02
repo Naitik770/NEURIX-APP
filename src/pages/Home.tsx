@@ -9,7 +9,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
-import { HABIT_ICONS as icons } from '../constants';
+import { HABIT_ICONS as icons } from '../config/icons';
 
 // Particle Burst for completion
 const ParticleBurst = ({ active }: { active: boolean }) => {
