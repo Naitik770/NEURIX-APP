@@ -249,8 +249,7 @@
           "participants": { "type": "array", "items": { "type": "string" } },
           "lastMessage": { "type": "string" },
           "lastMessageAt": { "type": "timestamp" },
-          "updatedAt": { "type": "timestamp" },
-          "typing": { "type": "object" }
+          "updatedAt": { "type": "timestamp" }
         }
       },
       "description": "Direct chat metadata between two users."

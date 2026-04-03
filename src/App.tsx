@@ -26,8 +26,6 @@ import Personalization from './pages/Personalization';
 import ChatHistory from './pages/ChatHistory';
 import CreateUsername from './pages/CreateUsername';
 import VerifyEmail from './pages/VerifyEmail';
-import FriendProfile from './pages/FriendProfile';
-import Leaderboard from './pages/Leaderboard';
 
 interface AuthContextType {
   user: User | null;
@@ -174,15 +172,10 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           await setDoc(publicProfileRef, {
             uid: user.uid,
             name: name,
-            searchName: name.toLowerCase(),
             username: username,
             avatarSeed: name || 'Aneka',
             avatarStyle: 'avataaars',
             avatarColor: 'transparent',
-            xp: 0,
-            level: 1,
-            streak: 0,
-            lifeScore: 50,
             createdAt: serverTimestamp()
           }, { merge: true });
 
@@ -261,24 +254,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       setOffline();
     };
   }, [user, profile]);
-
-  // Keep PublicProfile stats in sync with private profile
-  useEffect(() => {
-    if (!user || !profile) return;
-    const publicProfileRef = doc(db, 'publicProfiles', user.uid);
-    setDoc(publicProfileRef, {
-      xp: profile.xp || 0,
-      level: profile.level || 1,
-      streak: profile.streak || 0,
-      lifeScore: profile.lifeScore || 50,
-      avatarSeed: profile.avatarSeed || profile.name || 'Aneka',
-      avatarStyle: profile.avatarStyle || 'avataaars',
-      avatarColor: profile.avatarColor || 'transparent',
-      name: profile.name,
-      searchName: profile.name?.toLowerCase() || '',
-      updatedAt: serverTimestamp()
-    }, { merge: true }).catch(() => {});
-  }, [user, profile?.xp, profile?.level, profile?.streak, profile?.lifeScore, profile?.avatarSeed, profile?.avatarStyle, profile?.avatarColor, profile?.name]);
 
   // Sync reminders
   useEffect(() => {
@@ -489,15 +464,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
-  const location = useLocation();
-  const isChatPage = location.pathname.startsWith('/chat/');
-
   return (
-    <div className={`min-h-screen bg-[#FDFBF7] dark:bg-gray-900 ${isChatPage ? '' : 'pb-24'} font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative`}>
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-gray-900 pb-24 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative">
       <div className="relative z-10">
         {children}
       </div>
-      {!isChatPage && <BottomNav />}
+      <BottomNav />
     </div>
   );
 }
@@ -523,8 +495,6 @@ export default function App() {
             <Route path="/reminders" element={<ProtectedRoute><Layout><Reminders /></Layout></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Layout><Messages /></Layout></ProtectedRoute>} />
             <Route path="/chat/:friendId" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
-            <Route path="/friend/:friendId" element={<ProtectedRoute><Layout><FriendProfile /></Layout></ProtectedRoute>} />
-            <Route path="/leaderboard" element={<ProtectedRoute><Layout><Leaderboard /></Layout></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           </Routes>

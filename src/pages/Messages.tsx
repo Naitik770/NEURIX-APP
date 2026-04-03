@@ -16,7 +16,6 @@ export default function Messages() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [allProfiles, setAllProfiles] = useState<any[]>([]);
 
   // Fetch Friends
   useEffect(() => {
@@ -47,75 +46,51 @@ export default function Messages() {
     return () => unsubscribe();
   }, [user]);
 
-  // Fetch All Profiles for Search/Suggestions
-  useEffect(() => {
-    if (!user || activeTab !== 'add') return;
-    const fetchProfiles = async () => {
-      try {
-        const q = query(collection(db, 'publicProfiles'));
-        const snapshot = await getDocs(q);
-        setAllProfiles(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(u => u.id !== user.uid));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'publicProfiles');
-      }
-    };
-    fetchProfiles();
-  }, [user, activeTab]);
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim() || !user) return;
 
-  useEffect(() => {
-    if (activeTab !== 'add' || !user) return;
+    setIsSearching(true);
+    try {
+      const usernameRef = doc(db, 'usernames', searchQuery.toLowerCase());
+      const usernameDoc = await getDoc(usernameRef);
 
-    const updateDisplayedUsers = async () => {
-      setIsSearching(true);
-      
-      let filtered = allProfiles;
-      if (searchQuery.trim()) {
-        const queryLower = searchQuery.toLowerCase();
-        filtered = allProfiles.filter(p => 
-          (p.username && p.username.toLowerCase().includes(queryLower)) ||
-          (p.name && p.name.toLowerCase().includes(queryLower))
-        );
-      } else {
-        // Suggested friends: not already friends, random or first 10
-        const friendIds = new Set(friends.map(f => f.id));
-        filtered = allProfiles.filter(p => !friendIds.has(p.id)).slice(0, 10);
-      }
-
-      const usersWithStatus = await Promise.all(filtered.map(async (u) => {
-        const isFriend = friends.some(f => f.id === u.id);
-        const hasReceivedRequest = requests.some(r => r.fromUid === u.id);
-        let hasSentRequest = false;
-
-        if (!isFriend && !hasReceivedRequest) {
-          try {
-            const sentRequestDoc = await getDoc(doc(db, `users/${u.id}/friendRequests`, user.uid));
-            hasSentRequest = sentRequestDoc.exists();
-          } catch (e) {
-            console.error(e);
-          }
+      if (usernameDoc.exists()) {
+        const targetUid = usernameDoc.data().uid;
+        if (targetUid === user.uid) {
+          toast.error("You can't add yourself!");
+          setSearchResults([]);
+          return;
         }
 
-        return {
-          ...u,
-          isFriend,
-          hasSentRequest,
-          hasReceivedRequest
-        };
-      }));
+        const friendDoc = await getDoc(doc(db, `users/${user.uid}/friends`, targetUid));
+        const isAlreadyFriend = friendDoc.exists();
 
-      setSearchResults(usersWithStatus);
+        const sentRequestDoc = await getDoc(doc(db, `users/${targetUid}/friendRequests`, user.uid));
+        const hasSentRequest = sentRequestDoc.exists();
+
+        const receivedRequestDoc = await getDoc(doc(db, `users/${user.uid}/friendRequests`, targetUid));
+        const hasReceivedRequest = receivedRequestDoc.exists();
+
+        const targetUserDoc = await getDoc(doc(db, 'publicProfiles', targetUid));
+        if (targetUserDoc.exists()) {
+          setSearchResults([{ 
+            id: targetUid, 
+            ...targetUserDoc.data(), 
+            isFriend: isAlreadyFriend,
+            hasSentRequest,
+            hasReceivedRequest
+          }]);
+        }
+      } else {
+        setSearchResults([]);
+        toast.error("User not found");
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `usernames/${searchQuery.toLowerCase()}`);
+    } finally {
       setIsSearching(false);
-    };
-
-    const debounce = setTimeout(() => {
-      updateDisplayedUsers();
-    }, 300);
-
-    return () => clearTimeout(debounce);
-  }, [searchQuery, allProfiles, friends, requests, activeTab, user]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+    }
   };
 
   const sendFriendRequest = async (targetUid: string) => {
@@ -302,29 +277,25 @@ export default function Messages() {
               <form onSubmit={handleSearch} className="relative mb-8">
                 <input
                   type="text"
-                  placeholder="Search by name or username..."
+                  placeholder="Search by username..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-white dark:bg-gray-800 border-none rounded-2xl pl-14 pr-4 py-5 outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-gray-900 dark:text-white shadow-sm"
                 />
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 w-6 h-6" />
-                {isSearching && (
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2">
-                    <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                )}
+                <button 
+                  type="submit" 
+                  disabled={isSearching} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-orange-500 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-orange-600 transition-all disabled:opacity-50 shadow-lg shadow-orange-500/20"
+                >
+                  {isSearching ? '...' : 'Search'}
+                </button>
               </form>
 
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-2">
-                  {searchQuery.trim() ? 'Search Results' : 'Suggested Friends'}
-                </h3>
-                {searchResults.length === 0 && !isSearching ? (
-                  <div className="text-center py-10 text-gray-500 dark:text-gray-400">
-                    No users found.
-                  </div>
-                ) : (
-                  searchResults.map(result => {
+              {searchResults.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] px-2">Search Results</h3>
+                  {searchResults.map(result => {
                     return (
                       <div key={result.id} className="bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-sm flex items-center justify-between border border-transparent hover:border-orange-500/20 transition-all">
                         <div className="flex items-center gap-4">
@@ -363,9 +334,9 @@ export default function Messages() {
                         )}
                       </div>
                     );
-                  })
-                )}
-              </div>
+                  })}
+                </div>
+              )}
             </div>
           )}
         </motion.div>
