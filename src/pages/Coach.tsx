@@ -28,6 +28,7 @@ export default function Coach() {
   const [showWeatherModal, setShowWeatherModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const fetchWeather = async (force = false) => {
@@ -77,7 +78,7 @@ export default function Coach() {
       const current = data.current;
       
       // Detailed weather formatting
-      const weatherText = `It is currently ${current.temperature_2m}°C (feels like ${current.apparent_temperature}°C) with a wind speed of ${current.wind_speed_10m} km/h and ${current.relative_humidity_2m}% humidity.`;
+      const weatherText = `It is currently ${current.temperature_2m}Â°C (feels like ${current.apparent_temperature}Â°C) with a wind speed of ${current.wind_speed_10m} km/h and ${current.relative_humidity_2m}% humidity.`;
       
       setWeather(weatherText);
       setWeatherData(current);
@@ -218,6 +219,7 @@ User Profile: ${JSON.stringify(profile)}
 Current Weather: ${weather || 'Unknown'}
 Keep responses concise, motivating, and helpful.
 IMPORTANT: You MUST reply in the language the user is using.
+If the user says "talk to me in Hindi" or similar, switch to Hindi.
 The current year is 2026.`,
           tools: needsSearch ? [{ googleSearch: {} }] : [],
         }
@@ -300,6 +302,19 @@ The current year is 2026.`,
       setLiveText(t('coach.connecting'));
       setTranscription('');
       
+      // Create a session for the live chat
+      if (user) {
+        const sessionRef = await addDoc(collection(db, `users/${user.uid}/chatSessions`), {
+          uid: user.uid,
+          title: `Voice Session - ${format(new Date(), 'MMM d, HH:mm')}`,
+          lastMessage: 'Voice session started...',
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          type: 'voice'
+        });
+        setLiveSessionId(sessionRef.id);
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setIsRecording(true); // Only set recording true AFTER permission is granted
       streamRef.current = stream;
@@ -369,10 +384,40 @@ The current year is 2026.`,
               };
             }
 
-            // Handle transcriptions
+            // Handle model transcription
             if (message.serverContent?.modelTurn?.parts[0]?.text) {
-              setTranscription(prev => prev + message.serverContent?.modelTurn?.parts[0]?.text);
-              setLiveText(message.serverContent.modelTurn.parts[0].text);
+              const text = message.serverContent.modelTurn.parts[0].text;
+              setTranscription(prev => prev + text);
+              setLiveText(text);
+              
+              // Save model transcription to Firestore
+              if (user && liveSessionId) {
+                addDoc(collection(db, `users/${user.uid}/chatSessions/${liveSessionId}/messages`), {
+                  role: 'model',
+                  text: text,
+                  createdAt: serverTimestamp()
+                }).catch(e => console.error("Error saving model voice message", e));
+                
+                updateDoc(doc(db, `users/${user.uid}/chatSessions`, liveSessionId), {
+                  lastMessage: text,
+                  updatedAt: serverTimestamp()
+                }).catch(e => console.error("Error updating session", e));
+              }
+            }
+
+            // Handle user transcription
+            if (message.serverContent?.inputTranscription?.text) {
+              const text = message.serverContent.inputTranscription.text;
+              setLiveText(text);
+              
+              // Save user transcription to Firestore
+              if (user && liveSessionId) {
+                addDoc(collection(db, `users/${user.uid}/chatSessions/${liveSessionId}/messages`), {
+                  role: 'user',
+                  text: text,
+                  createdAt: serverTimestamp()
+                }).catch(e => console.error("Error saving user voice message", e));
+              }
             }
 
             if (message.serverContent?.interrupted) {
@@ -394,10 +439,14 @@ The current year is 2026.`,
         },
         config: {
           responseModalities: [Modality.AUDIO],
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
           },
-          systemInstruction: `You are NEURIX, a supportive AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and conversational. You are speaking directly to the user. IMPORTANT: You MUST reply in the following language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
+          systemInstruction: `You are NEURIX, a supportive AI life coach. The current date and time is ${new Date().toLocaleString()}. Keep responses concise, motivating, and conversational. You are speaking directly to the user.
+IMPORTANT: You MUST reply in the language the user is using. If the user says "talk to me in Hindi" or similar, switch to Hindi.
+Current Language: ${i18n.language === 'hi' ? 'Hindi' : 'English'}.`,
         },
       });
 
@@ -668,8 +717,8 @@ The current year is 2026.`,
               <div className="prose prose-sm prose-orange max-w-none text-gray-800 dark:text-gray-200">
                 {weatherData ? (
                   <div className="space-y-2">
-                    <p><strong>Temperature:</strong> {weatherData.temperature_2m}°C</p>
-                    <p><strong>Feels Like:</strong> {weatherData.apparent_temperature}°C</p>
+                    <p><strong>Temperature:</strong> {weatherData.temperature_2m}Â°C</p>
+                    <p><strong>Feels Like:</strong> {weatherData.apparent_temperature}Â°C</p>
                     <p><strong>Humidity:</strong> {weatherData.relative_humidity_2m}%</p>
                     <p><strong>Wind Speed:</strong> {weatherData.wind_speed_10m} km/h</p>
                   </div>
