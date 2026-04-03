@@ -462,16 +462,6 @@ export default function Home() {
             <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
               {getGreeting()}, {profile?.name?.split(' ')[0] || 'User'}
             </h1>
-            {profile?.streak > 0 && (
-              <motion.div 
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full"
-              >
-                <Flame className={`w-4 h-4 ${profile.streak > 7 ? 'text-red-500 animate-pulse' : 'text-orange-500'}`} fill="currentColor" />
-                <span className="text-xs font-bold text-orange-700 dark:text-orange-400">{profile.streak}</span>
-              </motion.div>
-            )}
           </div>
           <p className="text-gray-500 dark:text-gray-400 text-sm">{format(today, 'EEEE, d MMMM, yyyy')}</p>
         </div>
@@ -483,13 +473,6 @@ export default function Home() {
             <Bell className="w-5 h-5" />
             {/* TODO: Add notification badge logic here */}
           </Link>
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            className="flex flex-col items-end"
-          >
-            <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Level</span>
-            <span className="text-2xl font-black text-gray-900 dark:text-white leading-none">{profile?.level || 1}</span>
-          </motion.div>
           <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm transition-colors duration-300">
             <img src={getAvatarUrl(profile, user)} alt="Avatar" className="w-full h-full object-cover" />
           </div>
