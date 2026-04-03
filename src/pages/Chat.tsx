@@ -224,6 +224,13 @@ export default function Chat() {
     return format(date, 'MMM d, h:mm a');
   };
 
+  const shortenFileName = (name: string) => {
+    if (name.length <= 12) return name;
+    const ext = name.split('.').pop();
+    const base = name.substring(0, 8);
+    return `${base}...${ext}`;
+  };
+
   const groupMessagesByDate = (messages: any[]) => {
     const groups: { [key: string]: any[] } = {};
     messages.forEach(msg => {
@@ -248,23 +255,23 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] bg-[#FDFBF7] dark:bg-gray-900 overflow-hidden relative">
+    <div className="flex flex-col h-screen bg-[#FDFBF7] dark:bg-gray-900 overflow-hidden relative">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 z-20">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
+      <header className="flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-700 z-20">
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
           {friendProfile && (
             <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-orange-500/20">
+              <div className="relative w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border border-orange-500/20">
                 <img src={getAvatarUrl(friendProfile)} alt="Avatar" className="w-full h-full object-cover" />
               </div>
               <div>
                 <h2 className="font-bold text-gray-900 dark:text-white leading-tight text-sm">{friendProfile.name}</h2>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium tracking-wide">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                  <p className="text-[9px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider">
                     {isOnline ? 'Online' : 'Offline'}
                   </p>
                 </div>
@@ -277,15 +284,12 @@ export default function Chat() {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed opacity-90">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-40">
-            <div className="w-20 h-20 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
-              <Send className="w-10 h-10 text-orange-500" />
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-40">
+              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
+                <Send className="w-8 h-8 text-orange-500" />
+              </div>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Say hi!</p>
             </div>
-            <div>
-              <p className="text-sm font-bold text-gray-900 dark:text-white">Start a conversation</p>
-              <p className="text-xs text-gray-500">Say hi to {friendProfile?.name}!</p>
-            </div>
-          </div>
         ) : (
           Object.entries(messageGroups).map(([date, group]) => (
             <div key={date} className="flex flex-col">
@@ -409,7 +413,7 @@ export default function Chat() {
                                   <FileText className="w-6 h-6" />
                                 </div>
                                 <div className="flex flex-col min-w-0 flex-1 max-w-[180px] sm:max-w-[220px]">
-                                  <span className="text-sm font-semibold truncate">{msg.attachment.name}</span>
+                                  <span className="text-sm font-semibold truncate">{shortenFileName(msg.attachment.name)}</span>
                                   <span className={`text-[10px] uppercase tracking-wider ${isMe ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
                                     Document
                                   </span>
@@ -468,7 +472,7 @@ export default function Chat() {
                   <ArrowLeft className="w-6 h-6" />
                 </button>
                 <div className="text-white font-medium text-sm truncate drop-shadow-md">
-                  {previewMedia.name}
+                  {shortenFileName(previewMedia.name)}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -632,11 +636,11 @@ export default function Chat() {
       </AnimatePresence>
 
       {/* Input Area */}
-      <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 z-20">
+      <div className="p-2 bg-transparent z-20">
         {editingMessage ? (
-          <form onSubmit={handleEditMessage} className="flex flex-col gap-2 max-w-4xl mx-auto">
+          <form onSubmit={handleEditMessage} className="flex flex-col gap-2 max-w-4xl mx-auto bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between px-2">
-              <span className="text-xs font-semibold text-orange-500 flex items-center gap-1"><Edit2 className="w-3 h-3"/> Editing message</span>
+              <span className="text-xs font-semibold text-orange-500 flex items-center gap-1"><Edit2 className="w-3 h-3"/> Editing</span>
               <button type="button" onClick={() => { setEditingMessage(null); setEditMessageText(''); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
             </div>
             <div className="flex items-center gap-2">
@@ -644,23 +648,23 @@ export default function Chat() {
                 type="text"
                 value={editMessageText}
                 onChange={(e) => setEditMessageText(e.target.value)}
-                className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-5 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50 text-sm text-gray-900 dark:text-white transition-all"
+                className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500/50 text-sm text-gray-900 dark:text-white transition-all"
                 autoFocus
               />
-              <button type="submit" disabled={!editMessageText.trim()} className="w-12 h-12 rounded-2xl bg-green-500 flex items-center justify-center text-white hover:bg-green-600 disabled:opacity-50 transition-all shadow-lg shadow-green-500/20 active:scale-95">
-                <Check className="w-5 h-5" />
+              <button type="submit" disabled={!editMessageText.trim()} className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center text-white hover:bg-green-600 disabled:opacity-50 transition-all shadow-md shadow-green-500/20 active:scale-95">
+                <Check className="w-4 h-4" />
               </button>
             </div>
           </form>
         ) : (
-          <form onSubmit={handleSendMessage} className="flex items-end gap-2 max-w-4xl mx-auto">
+          <form onSubmit={handleSendMessage} className="flex items-center gap-3 w-full max-w-2xl mx-auto px-4">
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" />
             
-            <div className="flex-1 flex items-end bg-gray-100 dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-200/50 dark:border-gray-700/50 focus-within:ring-2 focus-within:ring-orange-500/50 focus-within:border-orange-500/50 transition-all shadow-sm">
+            <div className="flex-1 flex items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1.5 shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-700 transition-all">
               <button 
                 type="button" 
                 onClick={() => fileInputRef.current?.click()}
-                className="p-3.5 text-gray-500 hover:text-orange-500 transition-colors shrink-0"
+                className="p-3 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
                 title="Attach File"
               >
                 <Paperclip className="w-5 h-5" />
@@ -671,24 +675,21 @@ export default function Chat() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Message..."
-                className="flex-1 bg-transparent border-none px-2 py-3.5 outline-none text-sm text-gray-900 dark:text-white max-h-32"
+                className="flex-1 bg-transparent border-none px-2 py-3 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400"
               />
-              
-              <AnimatePresence>
-                {(newMessage.trim() || attachment) && (
-                  <motion.button 
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    type="submit" 
-                    disabled={!newMessage.trim() && !attachment}
-                    className="p-3.5 text-orange-500 hover:text-orange-600 disabled:opacity-50 transition-colors shrink-0 active:scale-95"
-                  >
-                    <Send className="w-5 h-5" />
-                  </motion.button>
-                )}
-              </AnimatePresence>
             </div>
+
+            <button 
+              type="submit" 
+              disabled={!newMessage.trim() && !attachment}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0 shadow-lg ${
+                (newMessage.trim() || attachment) 
+                  ? 'bg-orange-500 text-white shadow-orange-500/30 scale-105 active:scale-95' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 shadow-transparent'
+              }`}
+            >
+              <Send className="w-5 h-5" />
+            </button>
           </form>
         )}
       </div>
