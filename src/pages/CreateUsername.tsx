@@ -109,16 +109,25 @@ export default function CreateUsername() {
       if (publicProfileSnap.exists()) {
         await updateDoc(publicProfileRef, {
           username: lowerUsername,
+          name: name,
+          searchName: name.toLowerCase(),
+          xp: userSnap.exists() ? userSnap.data().xp || 0 : 0,
+          level: userSnap.exists() ? userSnap.data().level || 1 : 1,
+          streak: userSnap.exists() ? userSnap.data().streak || 0 : 0,
           updatedAt: serverTimestamp()
         });
       } else {
         await setDoc(publicProfileRef, {
           uid: user.uid,
           name: name,
+          searchName: name.toLowerCase(),
           username: lowerUsername,
           avatarSeed: name || 'Aneka',
           avatarStyle: 'avataaars',
           avatarColor: 'transparent',
+          xp: 0,
+          level: 1,
+          streak: 0,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });

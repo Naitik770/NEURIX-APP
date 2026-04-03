@@ -464,12 +464,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const isChatPage = location.pathname.startsWith('/chat/');
+
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-gray-900 pb-24 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative">
+    <div className={`min-h-screen bg-[#FDFBF7] dark:bg-gray-900 ${isChatPage ? '' : 'pb-24'} font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative`}>
       <div className="relative z-10">
         {children}
       </div>
-      <BottomNav />
+      {!isChatPage && <BottomNav />}
     </div>
   );
 }
