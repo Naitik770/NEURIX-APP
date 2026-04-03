@@ -1,32 +1,88 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-}
-
-@layer base {
-  body {
-    @apply bg-gray-100 text-gray-900 antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  }
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer utilities {
-  .scrollbar-hide::-webkit-scrollbar {
+  .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  .scrollbar-hide {
+  .hide-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 20px;
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  .glass {
+    @apply bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/30;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
 }
 
-/* Custom animations for Instagram-like feel */
-@keyframes bounce-in {
-  0% { transform: scale(0.95); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+.weather-report h3 {
+  @apply text-lg font-bold text-gray-900 mt-6 mb-3;
 }
 
-.animate-message {
-  animation: bounce-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+.weather-report p {
+  @apply mb-3 text-sm text-gray-700 leading-relaxed;
+}
+
+.weather-report ul {
+  @apply list-disc pl-5 mb-4 space-y-2;
+}
+
+.weather-report li {
+  @apply text-sm text-gray-700;
+}
+
+.weather-report strong {
+  @apply font-bold text-gray-900;
+}
+
+.weather-report table {
+  @apply w-full border-collapse my-6 rounded-2xl overflow-hidden shadow-sm border border-gray-100;
+}
+
+.weather-report th {
+  @apply bg-orange-50 text-orange-900 text-left p-3 text-xs font-bold uppercase tracking-wider;
+}
+
+.weather-report td {
+  @apply p-3 text-sm text-gray-700 border-t border-gray-50;
+}
+
+.weather-report tr:nth-child(even) {
+  @apply bg-gray-50/50;
 }

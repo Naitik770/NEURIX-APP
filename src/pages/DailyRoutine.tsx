@@ -6,7 +6,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Check, Trash2, Edit2, Play, Activity, RotateCcw, Pause, Flame, Droplet, Wind, Footprints, Book, Moon, Coffee, Dumbbell, Brain, Heart, Music, Utensils, Sun, Timer, Pencil } from 'lucide-react';
-import { HABIT_ICONS as icons } from '../config/icons';
+import { HABIT_ICONS as icons } from '../constants';
 
 export default function DailyRoutine() {
   const { user, profile } = useAuth();

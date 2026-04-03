@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth, getAvatarUrl } from '../App';
 import { logout, db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, updateDoc, serverTimestamp, query, collection, where, getCountFromServer } from 'firebase/firestore';
-import { User, Settings, LogOut, Award, Flame, Target, Edit3, Plus, X, Trophy } from 'lucide-react';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { User, Settings, LogOut, Award, Flame, Target, Edit3, Plus, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,7 +13,6 @@ export default function Profile() {
   const [avatarSeed, setAvatarSeed] = useState(profile?.avatarSeed || user?.uid || 'Aneka');
   const [avatarStyle, setAvatarStyle] = useState(profile?.avatarStyle || 'avataaars');
   const [avatarColor, setAvatarColor] = useState(profile?.avatarColor || 'transparent');
-  const [rank, setRank] = useState<number | null>(null);
 
   const AVATAR_STYLES = [
     { id: 'avataaars', name: 'Human' },
@@ -44,18 +43,6 @@ export default function Profile() {
       setAvatarSeed(profile.avatarSeed || user?.uid || 'Aneka');
       setAvatarStyle(profile.avatarStyle || 'avataaars');
       setAvatarColor(profile.avatarColor || 'transparent');
-      
-      // Fetch Rank
-      const fetchRank = async () => {
-        try {
-          const q = query(collection(db, 'publicProfiles'), where('xp', '>', profile.xp || 0));
-          const snapshot = await getCountFromServer(q);
-          setRank(snapshot.data().count + 1);
-        } catch (error) {
-          console.error("Error fetching rank:", error);
-        }
-      };
-      fetchRank();
     }
   }, [profile, user]);
 
@@ -183,7 +170,7 @@ export default function Profile() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 text-center shadow-sm transition-colors duration-300">
           <div className="w-10 h-10 mx-auto bg-orange-100 dark:bg-orange-500/20 text-orange-500 rounded-full flex items-center justify-center mb-2 transition-colors duration-300">
             <Flame className="w-5 h-5" />
@@ -205,31 +192,6 @@ export default function Profile() {
           <p className="text-xl font-bold text-gray-900 dark:text-white">{Math.min(100, Math.floor((profile?.xp || 0) / 10) + ((profile?.streak || 0) * 2))}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">Life Score</p>
         </div>
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-8 flex items-center justify-between shadow-sm transition-colors duration-300 border border-gray-50 dark:border-gray-700/50">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-500 rounded-2xl flex items-center justify-center transition-colors duration-300">
-            <Trophy className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Friend Rank</p>
-            <p className="text-lg font-black text-gray-900 dark:text-white">#{rank || '--'}</p>
-          </div>
-        </div>
-        <button 
-          onClick={() => navigate('/leaderboard')}
-          className="text-orange-500 font-bold text-xs bg-orange-50 dark:bg-orange-500/10 px-4 py-2 rounded-xl hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-colors"
-        >
-          Leaderboard
-        </button>
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm mb-8 transition-colors duration-300">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">About</h3>
-        <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-          {profile?.name} joined on {profile?.createdAt?.toDate ? profile.createdAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'recently'} and is currently at level {profile?.level || 1} with {profile?.xp || 0} XP.
-        </p>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm mb-8 transition-colors duration-300">

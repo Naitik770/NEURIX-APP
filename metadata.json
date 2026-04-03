@@ -1,5 +1,5 @@
 {
-  "name": "InstaChat - Premium DM Experience",
-  "description": "A high-performance, gesture-based chat system that mimics Instagram DM behavior with smooth animations and real-time sync.",
-  "requestFramePermissions": []
+  "name": "NEURIX - AI Life Engine",
+  "description": "Transform Your Life with AI. A comprehensive AI coach, habit tracker, and brain training app.",
+  "requestFramePermissions": ["microphone"]
 }
