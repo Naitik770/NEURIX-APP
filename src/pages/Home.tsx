@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth, getAvatarUrl } from '../App';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { Users, Plus, Check, Clock, Droplet, Wind, Activity, Footprints, Play, Pause, RotateCcw, X, Trash2, Edit2, Book, Moon, Coffee, Dumbbell, Brain, Heart, Music, Utensils, Sun, Timer, Pencil, Flame, Trophy } from 'lucide-react';
+import { Users, Bell, Plus, Check, Clock, Droplet, Wind, Activity, Footprints, Play, Pause, RotateCcw, X, Trash2, Edit2, Book, Moon, Coffee, Dumbbell, Brain, Heart, Music, Utensils, Sun, Timer, Pencil, Flame, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
