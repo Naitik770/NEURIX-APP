@@ -511,21 +511,33 @@ export default function Chat() {
         )}
       </AnimatePresence>
 
-      {/* Input Area - REFINED CENTERED INSTAGRAM STYLE */}
-      <div className="fixed bottom-0 left-0 w-full flex flex-col items-center z-40 pointer-events-none">
-        {/* Subtle Blur Area - Only at the bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-28 bg-white/5 dark:bg-gray-900/5 backdrop-blur-[4px] pointer-events-none" />
+{/* Input Area - PERFECTLY CENTERED */}
+      <div className="fixed bottom-0 inset-x-0 z-40 pointer-events-none">
+        {/* Subtle Blur Background - Spans full width */}
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-gray-900 dark:via-gray-900/80 dark:to-transparent pointer-events-none" />
 
-        <div className="relative w-full max-w-2xl px-4 pb-7 pointer-events-auto">
+        {/* Input Container - Constrained and Centered */}
+        <div className="relative max-w-2xl mx-auto px-4 pb-6 pointer-events-auto">
           {editingMessage ? (
-            <form onSubmit={handleEditMessage} className="flex flex-col gap-2 w-full bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700">
+            <motion.form 
+              initial={{ y: 20, opacity: 0 }} 
+              animate={{ y: 0, opacity: 1 }}
+              onSubmit={handleEditMessage} 
+              className="flex flex-col gap-2 w-full bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700"
+            >
               <div className="flex items-center justify-between px-2">
-                <span className="text-[10px] font-bold text-orange-500 flex items-center gap-1 uppercase tracking-wider"><Edit2 className="w-3 h-3"/> Editing</span>
-                <button type="button" onClick={() => { setEditingMessage(null); setEditMessageText(''); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
+                <span className="text-[10px] font-bold text-orange-500 flex items-center gap-1 uppercase tracking-wider">
+                  <Edit2 className="w-3 h-3"/> Editing Message
+                </span>
+                <button type="button" onClick={() => { setEditingMessage(null); setEditMessageText(''); }} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-4 h-4"/>
+                </button>
               </div>
               <div className="flex items-center gap-2">
                 <input 
-                  type="text" value={editMessageText} onChange={(e) => setEditMessageText(e.target.value)}
+                  type="text" 
+                  value={editMessageText} 
+                  onChange={(e) => setEditMessageText(e.target.value)}
                   className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-2.5 outline-none text-[14px] dark:text-white"
                   autoFocus 
                 />
@@ -533,12 +545,12 @@ export default function Chat() {
                   <Check className="w-4 h-4" />
                 </button>
               </div>
-            </form>
+            </motion.form>
           ) : (
             <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full">
               <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" />
               
-              <div className="flex-1 flex items-center bg-white dark:bg-gray-900/95 rounded-full pl-2 pr-1.5 py-1.5 shadow-2xl shadow-black/10 border border-gray-100 dark:border-gray-700 transition-all">
+              <div className="flex-1 flex items-center bg-white dark:bg-gray-800 rounded-full pl-2 pr-1.5 py-1.5 shadow-2xl border border-gray-100 dark:border-gray-700 transition-all focus-within:border-orange-500/50">
                 <button 
                   type="button" 
                   onClick={() => fileInputRef.current?.click()} 
@@ -570,7 +582,7 @@ export default function Chat() {
                     className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
                       (newMessage.trim() || attachment) 
                         ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 scale-100 active:scale-90' 
-                        : 'bg-transparent text-gray-300'
+                        : 'bg-transparent text-gray-300 pointer-events-none'
                     }`}
                   >
                     <Send className="w-4 h-4" />
