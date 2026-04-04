@@ -470,7 +470,7 @@ export default function Home() {
             to="/messages"
             className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-orange-500 dark:hover:text-orange-400 transition-colors relative"
           >
-            <Bell className="w-5 h-5" />
+            <Users className="w-5 h-5" />
             {/* TODO: Add notification badge logic here */}
           </Link>
           <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm transition-colors duration-300">
