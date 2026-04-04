@@ -438,57 +438,11 @@ export default function Chat() {
                 }
 
                 return (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                  <div 
                     key={msg.id} 
                     id={`msg-${msg.id}`}
-                    className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 transition-colors duration-500 px-1 ${spacingClass} relative group`}
-                    drag="x"
-                    dragConstraints={{ left: 0, right: 0 }}
-                    dragElastic={0.5}
-                    onDragEnd={(e, info) => {
-                      const threshold = 80;
-                      const x = info.offset.x;
-                      if ((!isMe && x > threshold) || (isMe && x < -threshold)) {
-                        setReplyingTo({
-                          id: msg.id,
-                          text: msg.text,
-                          senderName: isMe ? (nicknames[user?.uid!] || user?.displayName || 'You') : (nicknames[friendId!] || friendProfile?.name),
-                          attachment: msg.attachment
-                        });
-                        if (window.navigator.vibrate) window.navigator.vibrate(10);
-                      }
-                    }}
-                    onContextMenu={(e) => handleContextMenu(e, msg)}
-                    onTouchStart={(e) => {
-                      const timer = setTimeout(() => handleContextMenu(e, msg), 500);
-                      e.currentTarget.dataset.timer = timer.toString();
-                    }}
-                    onTouchEnd={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
-                    onTouchMove={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
+                    className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 px-1 ${spacingClass} relative group`}
                   >
-                    {/* Swipe Reply Icon Indicator */}
-                    <motion.div 
-                      style={{ 
-                        position: 'absolute',
-                        top: '50%',
-                        y: '-50%',
-                        [isMe ? 'right' : 'left']: -40,
-                        opacity: 0
-                      }}
-                      whileDrag={{ 
-                        opacity: 1,
-                        x: isMe ? -20 : 20,
-                        transition: { duration: 0.1 }
-                      }}
-                      className="pointer-events-none"
-                    >
-                      <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                        <CornerUpLeft className="w-4 h-4 text-white" />
-                      </div>
-                    </motion.div>
-
                     {!isMe && (
                       <div className="w-6 h-6 shrink-0 mb-1">
                         {isLastInSequence && (
@@ -498,12 +452,63 @@ export default function Chat() {
                         )}
                       </div>
                     )}
-                    <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
-                      <div className={`relative group select-none ${
-                        isMe 
-                          ? `bg-orange-500 text-white shadow-sm ${bubbleShape}` 
-                          : `bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm border border-gray-100 dark:border-gray-700 ${bubbleShape}`
-                      } ${(!msg.text && msg.attachment && msg.attachment.type !== 'file') ? 'p-1 bg-transparent border-none shadow-none' : 'px-4 py-2.5'}`}>
+
+                    <motion.div 
+                      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%] relative touch-pan-y`}
+                      drag="x"
+                      dragDirectionLock
+                      dragConstraints={{ left: 0, right: 0 }}
+                      dragElastic={0.6}
+                      dragMomentum={false}
+                      onDragEnd={(e, info) => {
+                        const threshold = 60;
+                        const x = info.offset.x;
+                        if ((!isMe && x > threshold) || (isMe && x < -threshold)) {
+                          setReplyingTo({
+                            id: msg.id,
+                            text: msg.text,
+                            senderName: isMe ? (nicknames[user?.uid!] || user?.displayName || 'You') : (nicknames[friendId!] || friendProfile?.name),
+                            attachment: msg.attachment
+                          });
+                          if (window.navigator.vibrate) window.navigator.vibrate(10);
+                        }
+                      }}
+                    >
+                      {/* Swipe Reply Icon Indicator */}
+                      <motion.div 
+                        style={{ 
+                          position: 'absolute',
+                          top: '50%',
+                          y: '-50%',
+                          [isMe ? 'right' : 'left']: -45,
+                          opacity: 0
+                        }}
+                        whileDrag={{ 
+                          opacity: 1,
+                          x: isMe ? -15 : 15,
+                          transition: { duration: 0.1 }
+                        }}
+                        className="pointer-events-none"
+                      >
+                        <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                          <CornerUpLeft className="w-4 h-4 text-white" />
+                        </div>
+                      </motion.div>
+
+                      <div 
+                        className={`relative group select-none ${
+                          isMe 
+                            ? `bg-orange-500 text-white shadow-sm ${bubbleShape}` 
+                            : `bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm border border-gray-100 dark:border-gray-700 ${bubbleShape}`
+                        } ${(!msg.text && msg.attachment && msg.attachment.type !== 'file') ? 'p-1 bg-transparent border-none shadow-none' : 'px-4 py-2.5'}`}
+                        onContextMenu={(e) => handleContextMenu(e, msg)}
+                        onTouchStart={(e) => {
+                          const timer = setTimeout(() => handleContextMenu(e, msg), 500);
+                          e.currentTarget.dataset.timer = timer.toString();
+                        }}
+                        onTouchEnd={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
+                        onTouchMove={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
+                      >
                         
                         {/* Reply Preview */}
                         {msg.replyTo && (
@@ -598,8 +603,8 @@ export default function Chat() {
                         </span>
                         {msg.isEdited && <span className="text-[9px] text-gray-400 italic">(edited)</span>}
                       </div>
-                    </div>
-                  </motion.div>
+                    </motion.div>
+                  </div>
                 );
               })}
             </div>
