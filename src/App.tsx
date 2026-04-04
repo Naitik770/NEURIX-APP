@@ -339,7 +339,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             // 1. Try Browser Notification
             if ("Notification" in window && Notification.permission === 'granted') {
               try {
-                const title = `⏰ ${reminder.title}`; 
+                const title = `â° ${reminder.title}`; 
                 const options = { 
                   body: "NEURIX: Scheduled Task", 
                   icon: 'https://picsum.photos/seed/neurix/192/192',
@@ -374,13 +374,13 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             toast.success(`Reminder: ${reminder.title}`, {
               description: `Scheduled for ${format(reminderTime, 'hh:mm a')}`,
               duration: 15000,
-              icon: '⏰',
+              icon: 'â°',
             });
 
             // 3. Fallback Alert
             if (!notified && window.location.pathname !== '/reminders') {
               setTimeout(() => {
-                alert(`⏰ NEURIX REMINDER: ${reminder.title}\n\nIt's time for your scheduled task!`);
+                alert(`â° NEURIX REMINDER: ${reminder.title}\n\nIt's time for your scheduled task!`);
               }, 1000);
               notified = true;
             } else if (!notified) {
@@ -464,12 +464,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const isChatPage = location.pathname.startsWith('/chat/');
+
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-gray-900 pb-24 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative">
-      <div className="relative z-10">
+    <div className={`${isChatPage ? 'h-screen overflow-hidden' : 'min-h-screen'} bg-[#FDFBF7] dark:bg-gray-900 ${isChatPage ? '' : 'pb-24'} font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 relative`}>
+      <div className={`relative z-10 ${isChatPage ? 'h-full' : ''}`}>
         {children}
       </div>
-      <BottomNav />
+      {!isChatPage && <BottomNav />}
     </div>
   );
 }
