@@ -329,7 +329,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFBF7] dark:bg-gray-900 overflow-hidden relative">
+    <div className="flex flex-col h-[100dvh] bg-[#FDFBF7] dark:bg-gray-900 overflow-hidden relative overscroll-x-none">
       {/* Header */}
       <header className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-700 z-30">
         <div className="flex items-center gap-2">
@@ -404,45 +404,47 @@ export default function Chat() {
       </header>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed opacity-90">
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50/50 dark:bg-gray-900/50 overscroll-none relative">
+        <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.01] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
         {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-40">
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-40 relative z-10">
               <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
                 <Send className="w-8 h-8 text-orange-500" />
               </div>
               <p className="text-sm font-bold text-gray-900 dark:text-white">Say hi!</p>
             </div>
         ) : (
-          Object.entries(messageGroups).map(([date, group]) => (
-            <div key={date} className="flex flex-col">
-              <div className="flex justify-center my-6">
-                <span className="px-3 py-1 bg-gray-200/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-full text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-                  {date === 'pending' ? 'Sending...' : (isToday(new Date(date)) ? 'Today' : (isYesterday(new Date(date)) ? 'Yesterday' : format(new Date(date), 'MMMM d, yyyy')))}
-                </span>
-              </div>
-              {group.map((msg, index) => {
-                const isMe = msg.senderId === user?.uid;
-                const prevMsg = index > 0 ? group[index - 1] : null;
-                const nextMsg = index < group.length - 1 ? group[index + 1] : null;
-                
-                const isFirstInSequence = !prevMsg || prevMsg.senderId !== msg.senderId;
-                const isLastInSequence = !nextMsg || nextMsg.senderId !== msg.senderId;
-                
-                const spacingClass = isLastInSequence ? 'mb-4' : 'mb-1';
+          <div className="relative z-10">
+            {Object.entries(messageGroups).map(([date, group]) => (
+              <div key={date} className="flex flex-col">
+                <div className="flex justify-center my-6">
+                  <span className="px-3 py-1 bg-gray-200/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-full text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest shadow-sm">
+                    {date === 'pending' ? 'Sending...' : (isToday(new Date(date)) ? 'Today' : (isYesterday(new Date(date)) ? 'Yesterday' : format(new Date(date), 'MMMM d, yyyy')))}
+                  </span>
+                </div>
+                {group.map((msg, index) => {
+                  const isMe = msg.senderId === user?.uid;
+                  const prevMsg = index > 0 ? group[index - 1] : null;
+                  const nextMsg = index < group.length - 1 ? group[index + 1] : null;
+                  
+                  const isFirstInSequence = !prevMsg || prevMsg.senderId !== msg.senderId;
+                  const isLastInSequence = !nextMsg || nextMsg.senderId !== msg.senderId;
+                  
+                  const spacingClass = isLastInSequence ? 'mb-4' : 'mb-1';
 
-                let bubbleShape = '';
-                if (isMe) {
-                  bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tr-2xl' : 'rounded-tr-sm'} ${isLastInSequence ? 'rounded-br-2xl' : 'rounded-br-sm'}`;
-                } else {
-                  bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tl-2xl' : 'rounded-tl-sm'} ${isLastInSequence ? 'rounded-bl-2xl' : 'rounded-bl-sm'}`;
-                }
+                  let bubbleShape = '';
+                  if (isMe) {
+                    bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tr-2xl' : 'rounded-tr-md'} ${isLastInSequence ? 'rounded-br-2xl' : 'rounded-br-md'}`;
+                  } else {
+                    bubbleShape = `rounded-2xl ${isFirstInSequence ? 'rounded-tl-2xl' : 'rounded-tl-md'} ${isLastInSequence ? 'rounded-bl-2xl' : 'rounded-bl-md'}`;
+                  }
 
-                return (
-                  <div 
-                    key={msg.id} 
-                    id={`msg-${msg.id}`}
-                    className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 px-1 ${spacingClass} relative group`}
-                  >
+                  return (
+                    <div 
+                      key={msg.id} 
+                      id={`msg-${msg.id}`}
+                      className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 px-1 ${spacingClass} relative group`}
+                    >
                     {!isMe && (
                       <div className="w-6 h-6 shrink-0 mb-1">
                         {isLastInSequence && (
@@ -608,7 +610,8 @@ export default function Chat() {
                 );
               })}
             </div>
-          ))
+          ))}
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -800,9 +803,9 @@ export default function Chat() {
       </AnimatePresence>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 p-4 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-20">
+      <div className="flex-shrink-0 px-4 py-3 pb-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-t border-gray-100 dark:border-gray-700 z-20">
         {editingMessage ? (
-          <form onSubmit={handleEditMessage} className="flex flex-col gap-2 max-w-4xl mx-auto bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
+          <form onSubmit={handleEditMessage} className="flex flex-col gap-2 w-full max-w-3xl mx-auto bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between px-2">
               <span className="text-xs font-semibold text-orange-500 flex items-center gap-1"><Edit2 className="w-3 h-3"/> Editing</span>
               <button type="button" onClick={() => { setEditingMessage(null); setEditMessageText(''); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
@@ -821,14 +824,14 @@ export default function Chat() {
             </div>
           </form>
         ) : (
-          <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full max-w-2xl mx-auto px-2">
+          <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full max-w-3xl mx-auto">
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" />
             
-            <div className="flex-1 flex items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1 shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-700 transition-all">
+            <div className="flex-1 flex items-center bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1.5 transition-all">
               <button 
                 type="button" 
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
+                className="p-2 text-gray-500 hover:text-orange-500 transition-colors shrink-0"
                 title="Attach File"
               >
                 <Paperclip className="w-5 h-5" />
@@ -839,13 +842,13 @@ export default function Chat() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Message..."
-                className="flex-1 bg-transparent border-none px-2 py-2.5 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400 min-w-0"
+                className="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-500 min-w-0"
               />
 
               <button 
                 type="button" 
                 onClick={startListening}
-                className={`p-2 transition-colors shrink-0 ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-400 hover:text-orange-500'}`}
+                className={`p-2 transition-colors shrink-0 ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-500 hover:text-orange-500'}`}
                 title="Voice Input"
               >
                 <Mic className="w-5 h-5" />
@@ -856,8 +859,8 @@ export default function Chat() {
                 disabled={!newMessage.trim() && !attachment}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ml-1 ${
                   (newMessage.trim() || attachment) 
-                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105 active:scale-95' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
+                    ? 'bg-orange-500 text-white shadow-md scale-105 active:scale-95' 
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400'
                 }`}
               >
                 <Send className="w-4 h-4" />
