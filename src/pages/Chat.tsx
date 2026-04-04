@@ -404,7 +404,7 @@ export default function Chat() {
       </header>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50/50 dark:bg-gray-900/50 overscroll-none relative">
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50/50 dark:bg-gray-900/50 overscroll-none relative touch-pan-y">
         <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.01] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
         {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-40 relative z-10">
@@ -827,11 +827,11 @@ export default function Chat() {
           <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full max-w-3xl mx-auto">
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" />
             
-            <div className="flex-1 flex items-center bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1.5 transition-all">
+            <div className="flex-1 flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm rounded-full px-2 py-1.5 transition-all focus-within:border-orange-300 focus-within:ring-2 focus-within:ring-orange-100 dark:focus-within:border-orange-500/50 dark:focus-within:ring-orange-500/20">
               <button 
                 type="button" 
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-gray-500 hover:text-orange-500 transition-colors shrink-0"
+                className="p-2 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
                 title="Attach File"
               >
                 <Paperclip className="w-5 h-5" />
@@ -842,13 +842,13 @@ export default function Chat() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Message..."
-                className="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-500 min-w-0"
+                className="flex-1 bg-transparent border-none px-2 py-2 outline-none text-[15px] text-gray-900 dark:text-white placeholder:text-gray-400 min-w-0"
               />
 
               <button 
                 type="button" 
                 onClick={startListening}
-                className={`p-2 transition-colors shrink-0 ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-500 hover:text-orange-500'}`}
+                className={`p-2 transition-colors shrink-0 ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-400 hover:text-orange-500'}`}
                 title="Voice Input"
               >
                 <Mic className="w-5 h-5" />
@@ -859,8 +859,8 @@ export default function Chat() {
                 disabled={!newMessage.trim() && !attachment}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ml-1 ${
                   (newMessage.trim() || attachment) 
-                    ? 'bg-orange-500 text-white shadow-md scale-105 active:scale-95' 
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400'
+                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 scale-105 active:scale-95' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
                 }`}
               >
                 <Send className="w-4 h-4" />
