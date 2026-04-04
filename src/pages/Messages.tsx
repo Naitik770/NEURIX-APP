@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, getAvatarUrl } from '../App';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDoc, where, getDocs } from 'firebase/firestore';
-import { ArrowLeft, Search, UserPlus, Check, X, MessageCircle, UserX, Clock, UserCheck } from 'lucide-react';
+import { ArrowLeft, Search, UserPlus, Check, X, MessageCircle, UserX, Clock, UserCheck, Users } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -12,6 +12,7 @@ export default function Messages() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'add'>('friends');
   const [friends, setFriends] = useState<any[]>([]);
+  const [friendsSearchQuery, setFriendsSearchQuery] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -22,11 +23,23 @@ export default function Messages() {
     if (!user) return;
     const q = query(collection(db, `users/${user.uid}/friends`));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const friendsData = await Promise.all(snapshot.docs.map(async (d) => {
-        const friendDoc = await getDoc(doc(db, 'publicProfiles', d.id));
-        return { id: d.id, ...friendDoc.data() };
-      }));
-      setFriends(friendsData);
+      const friendIds = snapshot.docs.map(d => d.id);
+      if (friendIds.length === 0) {
+        setFriends([]);
+        return;
+      }
+
+      // Fetch profiles for all friends
+      // Using Promise.all with getDoc is reliable and handles any number of friends
+      try {
+        const profiles = await Promise.all(friendIds.map(async (id) => {
+          const profileDoc = await getDoc(doc(db, 'publicProfiles', id));
+          return { id, ...profileDoc.data() };
+        }));
+        setFriends(profiles);
+      } catch (error) {
+        console.error("Error fetching friend profiles:", error);
+      }
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/friends`));
     return () => unsubscribe();
   }, [user]);
@@ -46,51 +59,76 @@ export default function Messages() {
     return () => unsubscribe();
   }, [user]);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim() || !user) return;
-
-    setIsSearching(true);
-    try {
-      const usernameRef = doc(db, 'usernames', searchQuery.toLowerCase());
-      const usernameDoc = await getDoc(usernameRef);
-
-      if (usernameDoc.exists()) {
-        const targetUid = usernameDoc.data().uid;
-        if (targetUid === user.uid) {
-          toast.error("You can't add yourself!");
-          setSearchResults([]);
-          return;
-        }
-
-        const friendDoc = await getDoc(doc(db, `users/${user.uid}/friends`, targetUid));
-        const isAlreadyFriend = friendDoc.exists();
-
-        const sentRequestDoc = await getDoc(doc(db, `users/${targetUid}/friendRequests`, user.uid));
-        const hasSentRequest = sentRequestDoc.exists();
-
-        const receivedRequestDoc = await getDoc(doc(db, `users/${user.uid}/friendRequests`, targetUid));
-        const hasReceivedRequest = receivedRequestDoc.exists();
-
-        const targetUserDoc = await getDoc(doc(db, 'publicProfiles', targetUid));
-        if (targetUserDoc.exists()) {
-          setSearchResults([{ 
-            id: targetUid, 
-            ...targetUserDoc.data(), 
-            isFriend: isAlreadyFriend,
-            hasSentRequest,
-            hasReceivedRequest
-          }]);
-        }
-      } else {
-        setSearchResults([]);
-        toast.error("User not found");
-      }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.GET, `usernames/${searchQuery.toLowerCase()}`);
-    } finally {
-      setIsSearching(false);
+  // Incremental Search
+  useEffect(() => {
+    if (!searchQuery.trim() || !user) {
+      setSearchResults([]);
+      return;
     }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const q = query(
+          collection(db, 'publicProfiles'),
+          where('username', '>=', searchQuery.toLowerCase()),
+          where('username', '<=', searchQuery.toLowerCase() + '\uf8ff')
+        );
+        
+        const qName = query(
+          collection(db, 'publicProfiles'),
+          where('name', '>=', searchQuery),
+          where('name', '<=', searchQuery + '\uf8ff')
+        );
+
+        const [usernameSnap, nameSnap] = await Promise.all([
+          getDocs(q),
+          getDocs(qName)
+        ]);
+
+        const resultsMap = new Map();
+        
+        usernameSnap.docs.forEach(doc => {
+          if (doc.id !== user.uid) {
+            resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+          }
+        });
+
+        nameSnap.docs.forEach(doc => {
+          if (doc.id !== user.uid) {
+            resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+          }
+        });
+
+        const results = Array.from(resultsMap.values());
+
+        // Check relationship status for each result
+        const resultsWithStatus = await Promise.all(results.map(async (res) => {
+          const friendDoc = await getDoc(doc(db, `users/${user.uid}/friends`, res.id));
+          const sentRequestDoc = await getDoc(doc(db, `users/${res.id}/friendRequests`, user.uid));
+          const receivedRequestDoc = await getDoc(doc(db, `users/${user.uid}/friendRequests`, res.id));
+
+          return {
+            ...res,
+            isFriend: friendDoc.exists(),
+            hasSentRequest: sentRequestDoc.exists(),
+            hasReceivedRequest: receivedRequestDoc.exists()
+          };
+        }));
+
+        setSearchResults(resultsWithStatus);
+      } catch (error) {
+        console.error("Search error:", error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, user]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
   };
 
   const sendFriendRequest = async (targetUid: string) => {
@@ -156,13 +194,23 @@ export default function Messages() {
     }
   };
 
+  const filteredFriends = friends.filter(f => 
+    (f.name?.toLowerCase().includes(friendsSearchQuery.toLowerCase())) || 
+    (f.username?.toLowerCase().includes(friendsSearchQuery.toLowerCase()))
+  );
+
   return (
     <div className="p-6 pt-12 min-h-screen bg-[#FDFBF7] dark:bg-gray-900 pb-32 transition-colors duration-300">
-      <header className="flex items-center gap-4 mb-8">
-        <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Social</h1>
+      <header className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div className="flex items-center gap-2">
+            <Users className="w-6 h-6 text-orange-500" />
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Social</h1>
+          </div>
+        </div>
       </header>
 
       {/* Tabs */}
@@ -177,9 +225,9 @@ export default function Messages() {
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
           >
-            {tab === 'friends' && `Friends (${friends.length})`}
+            {tab === 'friends' && `Friends`}
             {tab === 'requests' && 'Requests'}
-            {tab === 'add' && 'Add Friend'}
+            {tab === 'add' && 'Add'}
             {tab === 'requests' && requests.length > 0 && (
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
             )}
@@ -199,16 +247,39 @@ export default function Messages() {
         >
           {activeTab === 'friends' && (
             <>
-              {friends.length === 0 ? (
+              <div className="relative mb-6">
+                <input
+                  type="text"
+                  placeholder="Search friends..."
+                  value={friendsSearchQuery}
+                  onChange={(e) => setFriendsSearchQuery(e.target.value)}
+                  className="w-full bg-white dark:bg-gray-800 border-none rounded-2xl pl-12 pr-4 py-4 outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-gray-900 dark:text-white shadow-sm text-sm"
+                />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                {friendsSearchQuery && (
+                  <button 
+                    onClick={() => setFriendsSearchQuery('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {filteredFriends.length === 0 ? (
                 <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-3xl border-2 border-dashed border-gray-100 dark:border-gray-700">
                   <div className="w-16 h-16 bg-orange-50 dark:bg-orange-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
                     <UserPlus className="w-8 h-8 text-orange-500 opacity-40" />
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 font-medium">No friends yet</p>
-                  <button onClick={() => setActiveTab('add')} className="mt-4 text-orange-500 text-sm font-bold hover:underline">Find people to follow</button>
+                  <p className="text-gray-500 dark:text-gray-400 font-medium">
+                    {friendsSearchQuery ? 'No friends match your search' : 'No friends yet'}
+                  </p>
+                  {!friendsSearchQuery && (
+                    <button onClick={() => setActiveTab('add')} className="mt-4 text-orange-500 text-sm font-bold hover:underline">Find people to follow</button>
+                  )}
                 </div>
               ) : (
-                friends.map(friend => (
+                filteredFriends.map(friend => (
                   <div key={friend.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md transition-all border border-transparent hover:border-orange-500/10">
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
