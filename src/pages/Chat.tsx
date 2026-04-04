@@ -465,7 +465,54 @@ export default function Chat() {
             </div>
           ))
         )}
-        <div ref={messagesEndRef} />
+<div className="fixed bottom-0 inset-x-0 z-40 flex justify-center pointer-events-none">
+  
+  {/* Blur Background */}
+  <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-gray-900 dark:via-gray-900/80 dark:to-transparent pointer-events-none" />
+
+  {/* Input Container */}
+  <div className="relative w-full max-w-2xl px-4 pb-6 pointer-events-auto">
+    
+    <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full">
+
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileSelect} 
+        className="hidden" 
+      />
+
+      <div className="w-full flex items-center bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-full px-3 py-2 shadow-2xl border border-gray-200/50 dark:border-gray-700">
+
+        <button 
+          type="button" 
+          onClick={() => fileInputRef.current?.click()} 
+          className="p-2 text-gray-400 hover:text-orange-500"
+        >
+          <Paperclip className="w-5 h-5" />
+        </button>
+
+        <input 
+          type="text" 
+          value={newMessage} 
+          onChange={(e) => setNewMessage(e.target.value)} 
+          placeholder="Message..."
+          className="flex-1 bg-transparent border-none px-2 py-1 outline-none text-[15px] text-gray-900 dark:text-white"
+        />
+
+        <button 
+          type="submit" 
+          disabled={!newMessage.trim() && !attachment} 
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-orange-500 text-white"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+
+      </div>
+    </form>
+
+  </div>
+</div>        <div ref={messagesEndRef} />
       </div>
 
       {/* Full Screen Media Preview */}
@@ -490,75 +537,7 @@ export default function Chat() {
 // ONLY showing the UPDATED INPUT SECTION (rest of your code remains SAME)
 
 {/* Input Area - PERFECTLY CENTERED PREMIUM */}
-
-<div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-2xl z-40 pointer-events-none">
-  {/* Blur Background */}
-  <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-gray-900 dark:via-gray-900/80 dark:to-transparent pointer-events-none" />{/* Input Container */}
-
-  <div className="relative w-full px-4 pb-6 flex justify-center pointer-events-auto"><form 
-  onSubmit={handleSendMessage} 
-  className="flex items-center gap-2 w-full max-w-2xl mx-auto"
->
-
-  <input 
-    type="file" 
-    ref={fileInputRef} 
-    onChange={handleFileSelect} 
-    className="hidden" 
-    accept="image/*,video/*,.pdf,.doc,.docx,.txt" 
-  />
-  
-  {/* MAIN INPUT */}
-  <div className="w-full flex items-center bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-full px-3 py-2 shadow-2xl border border-gray-200/50 dark:border-gray-700 transition-all focus-within:border-orange-500/50">
-    
-    {/* ATTACH BUTTON */}
-    <button 
-      type="button" 
-      onClick={() => fileInputRef.current?.click()} 
-      className="p-2 text-gray-400 hover:text-orange-500 transition-colors"
-    >
-      <Paperclip className="w-5 h-5" />
-    </button>
-
-    {/* TEXT INPUT */}
-    <input 
-      type="text" 
-      value={newMessage} 
-      onChange={(e) => setNewMessage(e.target.value)} 
-      placeholder="Message..."
-      className="flex-1 bg-transparent border-none px-2 py-1 outline-none text-[15px] text-gray-900 dark:text-white placeholder:text-gray-400 min-w-0" 
-    />
-
-    {/* ACTION BUTTONS */}
-    <div className="flex items-center gap-1">
-
-      {/* MIC */}
-      <button 
-        type="button" 
-        onClick={startListening} 
-        className={`p-2 transition-colors ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-400 hover:text-orange-500'}`}
-      >
-        <Mic className="w-5 h-5" />
-      </button>
-
-      {/* SEND */}
-      <button 
-        type="submit" 
-        disabled={!newMessage.trim() && !attachment} 
-        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-          (newMessage.trim() || attachment)
-            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 scale-100 active:scale-90'
-            : 'bg-transparent text-gray-300 pointer-events-none'
-        }`}
-      >
-        <Send className="w-4 h-4" />
-      </button>
-    </div>
-  </div>
-</form>
-
-  </div>
-</div>// ✨ PREMIUM ADD-ON (Optional but recommended) // Add this class to your main container for better spacing // className="pb-28"
+// ✨ PREMIUM ADD-ON (Optional but recommended) // Add this class to your main container for better spacing // className="pb-28"
 
 // This prevents content from hiding behind the input
 
