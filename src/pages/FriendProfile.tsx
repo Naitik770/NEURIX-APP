@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth, getAvatarUrl } from '../App';
-import { ArrowLeft, Flame, Trophy, Star, Heart, MessageCircle, UserPlus, Check, X, Shield, Calendar, MapPin } from 'lucide-react';
+import { ArrowLeft, Flame, Trophy, Star, Heart, MessageCircle, UserPlus, Check, X, Shield, Calendar, MapPin, Hash } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -14,6 +14,7 @@ const FriendProfile: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [friendStatus, setFriendStatus] = useState<'none' | 'pending' | 'friends'>('none');
+  const [rank, setRank] = useState<number | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -33,6 +34,32 @@ const FriendProfile: React.FC = () => {
       handleFirestoreError(error, OperationType.GET, `publicProfiles/${userId}`);
       setLoading(false);
     });
+
+    // Fetch rank
+    const fetchRank = async () => {
+      try {
+        const profilesRef = collection(db, 'publicProfiles');
+        const q = query(profilesRef, orderBy('xp', 'desc'));
+        const querySnapshot = await getDocs(q);
+        let currentRank = 1;
+        let found = false;
+        querySnapshot.forEach((docSnap) => {
+          if (!found) {
+            if (docSnap.id === userId) {
+              found = true;
+            } else {
+              currentRank++;
+            }
+          }
+        });
+        if (found) {
+          setRank(currentRank);
+        }
+      } catch (error) {
+        console.error("Error fetching rank:", error);
+      }
+    };
+    fetchRank();
 
     // Check friendship status
     let unsubscribeFriend: (() => void) | undefined;
@@ -177,11 +204,13 @@ const FriendProfile: React.FC = () => {
           
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-center">
-              <MapPin className="w-5 h-5 text-green-500" />
+              <Hash className="w-5 h-5 text-green-500" />
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Location</p>
-              <p className="font-bold text-gray-900 dark:text-white">{profile?.location || 'Earth'}</p>
+              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Global Rank</p>
+              <p className="font-bold text-gray-900 dark:text-white">
+                {rank ? `#${rank}` : 'Calculating...'}
+              </p>
             </div>
           </div>
         </div>
