@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, getAvatarUrl } from '../App';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, onSnapshot, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { ArrowLeft, Send, Paperclip, X, Edit2, Trash2, Image as ImageIcon, FileText, Check, FileVideo, Download, Play, CornerUpLeft, ExternalLink, Loader2, Copy } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, X, Edit2, Trash2, Image as ImageIcon, FileText, Check, FileVideo, Download, Play, CornerUpLeft, ExternalLink, Loader2, Copy, Mic } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -26,7 +26,34 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name: string, id: string} | null>(null);
   const [fileAction, setFileAction] = useState<{url: string, name: string, type: string, id: string} | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast.error("Speech recognition not supported in this browser.");
+      return;
+    }
+
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setNewMessage(prev => prev + (prev ? ' ' : '') + transcript);
+    };
+
+    recognition.start();
+  };
   const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
 
   // Fetch friend profile
@@ -661,14 +688,14 @@ export default function Chat() {
             </div>
           </form>
         ) : (
-          <form onSubmit={handleSendMessage} className="flex items-center gap-3 w-full max-w-2xl mx-auto px-4">
+          <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full max-w-2xl mx-auto px-2">
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" />
             
-            <div className="flex-1 flex items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1.5 shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-700 transition-all">
+            <div className="flex-1 flex items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1 shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-700 transition-all">
               <button 
                 type="button" 
                 onClick={() => fileInputRef.current?.click()}
-                className="p-3 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
+                className="p-2 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
                 title="Attach File"
               >
                 <Paperclip className="w-5 h-5" />
@@ -679,14 +706,23 @@ export default function Chat() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Message..."
-                className="flex-1 bg-transparent border-none px-2 py-3 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400"
+                className="flex-1 bg-transparent border-none px-2 py-2.5 outline-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400 min-w-0"
               />
+
+              <button 
+                type="button" 
+                onClick={startListening}
+                className={`p-2 transition-colors shrink-0 ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-400 hover:text-orange-500'}`}
+                title="Voice Input"
+              >
+                <Mic className="w-5 h-5" />
+              </button>
             </div>
 
             <button 
               type="submit" 
               disabled={!newMessage.trim() && !attachment}
-              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0 shadow-lg ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all shrink-0 shadow-lg ${
                 (newMessage.trim() || attachment) 
                   ? 'bg-orange-500 text-white shadow-orange-500/30 scale-105 active:scale-95' 
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-400 shadow-transparent'
