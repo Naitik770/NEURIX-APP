@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, getAvatarUrl } from '../App';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, onSnapshot, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { ArrowLeft, Send, Paperclip, X, Edit2, Trash2, Image as ImageIcon, FileText, Check, FileVideo, Download, Play, CornerUpLeft, ExternalLink, Loader2, Copy, Mic } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, X, Edit2, Trash2, Image as ImageIcon, FileText, Check, FileVideo, Download, Play, CornerUpLeft, ExternalLink, Loader2, Copy, Mic, MoreVertical, User, Pencil } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -28,6 +28,48 @@ export default function Chat() {
   const [fileAction, setFileAction] = useState<{url: string, name: string, type: string, id: string} | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showNicknameModal, setShowNicknameModal] = useState(false);
+  const [chatMetadata, setChatMetadata] = useState<any>(null);
+  const [nicknames, setNicknames] = useState<{ [key: string]: string }>({});
+  const [tempNickname, setTempNickname] = useState('');
+  const [nicknameTarget, setNicknameTarget] = useState<'me' | 'friend' | null>(null);
+
+  // Fetch chat metadata for nicknames
+  useEffect(() => {
+    if (!user || !friendId) return;
+    const chatId = [user.uid, friendId].sort().join('_');
+    const unsubscribe = onSnapshot(doc(db, 'chats', chatId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setChatMetadata(data);
+        setNicknames(data.nicknames || {});
+      }
+    });
+    return () => unsubscribe();
+  }, [user, friendId]);
+
+  const handleSetNickname = async () => {
+    if (!user || !friendId || !nicknameTarget) return;
+    const chatId = [user.uid, friendId].sort().join('_');
+    const targetUid = nicknameTarget === 'me' ? user.uid : friendId;
+    
+    try {
+      const newNicknames = { ...nicknames, [targetUid]: tempNickname.trim() };
+      await setDoc(doc(db, 'chats', chatId), { 
+        nicknames: newNicknames,
+        updatedAt: serverTimestamp(),
+        participants: [user.uid, friendId].sort()
+      }, { merge: true });
+      
+      setShowNicknameModal(false);
+      setTempNickname('');
+      setNicknameTarget(null);
+      toast.success("Nickname updated!");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `chats/${chatId}`);
+    }
+  };
 
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -299,8 +341,10 @@ export default function Chat() {
               <div className="relative w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 overflow-hidden border border-orange-500/20">
                 <img src={getAvatarUrl(friendProfile)} alt="Avatar" className="w-full h-full object-cover" />
               </div>
-              <div>
-                <h2 className="font-bold text-gray-900 dark:text-white leading-tight text-sm">{friendProfile.name}</h2>
+              <div className="flex flex-col">
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                  {nicknames[friendId!] || friendProfile.name}
+                </h2>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                   <p className="text-[9px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider">
@@ -310,6 +354,52 @@ export default function Chat() {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="relative">
+          <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+          >
+            <MoreVertical className="w-5 h-5" />
+          </button>
+
+          <AnimatePresence>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 z-50 overflow-hidden"
+                >
+                  <button 
+                    onClick={() => {
+                      setShowMenu(false);
+                      setNicknameTarget('friend');
+                      setTempNickname(nicknames[friendId!] || '');
+                      setShowNicknameModal(true);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                  >
+                    <Pencil className="w-4 h-4 text-orange-500" />
+                    Set Nickname
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowMenu(false);
+                      navigate(`/profile/${friendId}`);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                  >
+                    <User className="w-4 h-4 text-orange-500" />
+                    View Profile
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </header>
 
@@ -353,7 +443,23 @@ export default function Chat() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     key={msg.id} 
                     id={`msg-${msg.id}`}
-                    className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 transition-colors duration-500 px-1 ${spacingClass}`}
+                    className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 transition-colors duration-500 px-1 ${spacingClass} relative group`}
+                    drag="x"
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={0.5}
+                    onDragEnd={(e, info) => {
+                      const threshold = 80;
+                      const x = info.offset.x;
+                      if ((!isMe && x > threshold) || (isMe && x < -threshold)) {
+                        setReplyingTo({
+                          id: msg.id,
+                          text: msg.text,
+                          senderName: isMe ? (nicknames[user?.uid!] || user?.displayName || 'You') : (nicknames[friendId!] || friendProfile?.name),
+                          attachment: msg.attachment
+                        });
+                        if (window.navigator.vibrate) window.navigator.vibrate(10);
+                      }
+                    }}
                     onContextMenu={(e) => handleContextMenu(e, msg)}
                     onTouchStart={(e) => {
                       const timer = setTimeout(() => handleContextMenu(e, msg), 500);
@@ -362,6 +468,27 @@ export default function Chat() {
                     onTouchEnd={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
                     onTouchMove={(e) => clearTimeout(Number(e.currentTarget.dataset.timer))}
                   >
+                    {/* Swipe Reply Icon Indicator */}
+                    <motion.div 
+                      style={{ 
+                        position: 'absolute',
+                        top: '50%',
+                        y: '-50%',
+                        [isMe ? 'right' : 'left']: -40,
+                        opacity: 0
+                      }}
+                      whileDrag={{ 
+                        opacity: 1,
+                        x: isMe ? -20 : 20,
+                        transition: { duration: 0.1 }
+                      }}
+                      className="pointer-events-none"
+                    >
+                      <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                        <CornerUpLeft className="w-4 h-4 text-white" />
+                      </div>
+                    </motion.div>
+
                     {!isMe && (
                       <div className="w-6 h-6 shrink-0 mb-1">
                         {isLastInSequence && (
@@ -718,22 +845,97 @@ export default function Chat() {
               >
                 <Mic className="w-5 h-5" />
               </button>
-            </div>
 
-            <button 
-              type="submit" 
-              disabled={!newMessage.trim() && !attachment}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all shrink-0 shadow-lg ${
-                (newMessage.trim() || attachment) 
-                  ? 'bg-orange-500 text-white shadow-orange-500/30 scale-105 active:scale-95' 
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 shadow-transparent'
-              }`}
-            >
-              <Send className="w-5 h-5" />
-            </button>
+              <button 
+                type="submit" 
+                disabled={!newMessage.trim() && !attachment}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ml-1 ${
+                  (newMessage.trim() || attachment) 
+                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 scale-105 active:scale-95' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
+                }`}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
           </form>
         )}
       </div>
+
+      {/* Nickname Modal */}
+      <AnimatePresence>
+        {showNicknameModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowNicknameModal(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Set Nickname</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  {nicknameTarget === 'me' ? "Set your own nickname in this chat." : `Set a nickname for ${friendProfile?.name}.`}
+                </p>
+                
+                <div className="space-y-4">
+                  <div className="flex gap-2 mb-4">
+                    <button 
+                      onClick={() => {
+                        setNicknameTarget('friend');
+                        setTempNickname(nicknames[friendId!] || '');
+                      }}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${nicknameTarget === 'friend' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}
+                    >
+                      Friend
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setNicknameTarget('me');
+                        setTempNickname(nicknames[user?.uid!] || '');
+                      }}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${nicknameTarget === 'me' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}
+                    >
+                      Me
+                    </button>
+                  </div>
+
+                  <input 
+                    type="text"
+                    value={tempNickname}
+                    onChange={(e) => setTempNickname(e.target.value)}
+                    placeholder="Enter nickname..."
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-4 outline-none focus:ring-2 focus:ring-orange-500/50 text-gray-900 dark:text-white transition-all"
+                    autoFocus
+                  />
+                  
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      onClick={() => setShowNicknameModal(false)}
+                      className="flex-1 py-4 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleSetNickname}
+                      className="flex-1 py-4 rounded-2xl bg-orange-500 text-white font-bold shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-all active:scale-95"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Context Menu */}
       <AnimatePresence>
