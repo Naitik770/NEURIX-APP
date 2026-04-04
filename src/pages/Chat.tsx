@@ -482,33 +482,7 @@ export default function Chat() {
         className="hidden" 
       />
 
-      <div className="w-full flex items-center bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-full px-3 py-2 shadow-2xl border border-gray-200/50 dark:border-gray-700">
-
-        <button 
-          type="button" 
-          onClick={() => fileInputRef.current?.click()} 
-          className="p-2 text-gray-400 hover:text-orange-500"
-        >
-          <Paperclip className="w-5 h-5" />
-        </button>
-
-        <input 
-          type="text" 
-          value={newMessage} 
-          onChange={(e) => setNewMessage(e.target.value)} 
-          placeholder="Message..."
-          className="flex-1 bg-transparent border-none px-2 py-1 outline-none text-[15px] text-gray-900 dark:text-white"
-        />
-
-        <button 
-          type="submit" 
-          disabled={!newMessage.trim() && !attachment} 
-          className="w-10 h-10 rounded-full flex items-center justify-center bg-orange-500 text-white"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-
-      </div>
+      
     </form>
 
   </div>
@@ -520,7 +494,56 @@ export default function Chat() {
         {previewMedia && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xl" onClick={() => setPreviewMedia(null)}>
             <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setPreviewMedia(null)} className="p-2 text-white bg-white/10 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
+            <div className="w-full flex items-center bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-full px-2 py-1.5 shadow-xl border border-gray-200/50 dark:border-gray-700">
+
+  {/* ATTACH */}
+  <button 
+    type="button" 
+    onClick={() => fileInputRef.current?.click()} 
+    className="p-2 text-gray-400 hover:text-orange-500 transition-colors"
+  >
+    <Paperclip className="w-5 h-5" />
+  </button>
+
+  {/* INPUT */}
+  <input 
+    type="text" 
+    value={newMessage} 
+    onChange={(e) => setNewMessage(e.target.value)} 
+    placeholder="Message..."
+    className="flex-1 bg-transparent border-none px-2 py-2 outline-none text-[15px] text-gray-900 dark:text-white placeholder:text-gray-400"
+  />
+
+  {/* RIGHT SIDE ACTIONS */}
+  <div className="flex items-center gap-1 pr-1">
+
+    {/* MIC (only when empty) */}
+    {!newMessage.trim() && !attachment && (
+      <button 
+        type="button" 
+        onClick={startListening} 
+        className={`p-2 transition-all ${
+          isListening 
+            ? 'text-orange-500 animate-pulse' 
+            : 'text-gray-400 hover:text-orange-500'
+        }`}
+      >
+        <Mic className="w-5 h-5" />
+      </button>
+    )}
+
+    {/* SEND (only when text exists) */}
+    {(newMessage.trim() || attachment) && (
+      <button 
+        type="submit" 
+        className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-md active:scale-90 transition-all"
+      >
+        <Send className="w-4 h-4" />
+      </button>
+    )}
+
+  </div>
+</div>  <button onClick={() => setPreviewMedia(null)} className="p-2 text-white bg-white/10 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
               <button onClick={() => handleDownload(previewMedia.url, previewMedia.name, previewMedia.id)} className="p-2 text-white bg-white/10 rounded-full"><Download className="w-6 h-6" /></button>
             </div>
             {previewMedia.type === 'image' ? <img src={previewMedia.url} className="max-w-full max-h-full object-contain" /> : <video src={previewMedia.url} controls autoPlay className="max-w-full max-h-full object-contain" />}
