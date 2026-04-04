@@ -26,6 +26,7 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name: string, id: string} | null>(null);
   const [fileAction, setFileAction] = useState<{url: string, name: string, type: string, id: string} | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
 
   const startListening = () => {
