@@ -18,8 +18,10 @@ const FriendProfile: React.FC = () => {
   useEffect(() => {
     if (!userId) return;
 
+    setLoading(true);
+
     // Fetch profile data
-    const unsubscribeProfile = onSnapshot(doc(db, 'users', userId), (docSnap) => {
+    const unsubscribeProfile = onSnapshot(doc(db, 'publicProfiles', userId), (docSnap) => {
       if (docSnap.exists()) {
         setProfile(docSnap.data());
       } else {
@@ -28,36 +30,47 @@ const FriendProfile: React.FC = () => {
       }
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `users/${userId}`);
+      handleFirestoreError(error, OperationType.GET, `publicProfiles/${userId}`);
       setLoading(false);
     });
 
     // Check friendship status
+    let unsubscribeFriend: (() => void) | undefined;
+    let unsubscribeSentReq: (() => void) | undefined;
+    let unsubscribeReceivedReq: (() => void) | undefined;
+
     if (user) {
-      const unsubscribeFriend = onSnapshot(doc(db, 'users', user.uid, 'friends', userId), (docSnap) => {
+      // Listen to friendship
+      unsubscribeFriend = onSnapshot(doc(db, 'users', user.uid, 'friends', userId), (docSnap) => {
         if (docSnap.exists()) {
           setFriendStatus('friends');
         } else {
-          // Check if there's a pending request
-          const checkRequest = async () => {
-            const reqId = [user.uid, userId].sort().join('_');
-            const reqSnap = await getDoc(doc(db, 'friendRequests', reqId));
-            if (reqSnap.exists()) {
+          // If not friends, listen to friend requests
+          // 1. Sent request
+          unsubscribeSentReq = onSnapshot(doc(db, `users/${userId}/friendRequests`, user.uid), (sentSnap) => {
+            if (sentSnap.exists()) {
               setFriendStatus('pending');
             } else {
-              setFriendStatus('none');
+              // 2. Received request
+              unsubscribeReceivedReq = onSnapshot(doc(db, `users/${user.uid}/friendRequests`, userId), (receivedSnap) => {
+                if (receivedSnap.exists()) {
+                  setFriendStatus('pending');
+                } else {
+                  setFriendStatus('none');
+                }
+              });
             }
-          };
-          checkRequest();
+          });
         }
       });
-      return () => {
-        unsubscribeProfile();
-        unsubscribeFriend();
-      };
     }
 
-    return () => unsubscribeProfile();
+    return () => {
+      unsubscribeProfile();
+      if (unsubscribeFriend) unsubscribeFriend();
+      if (unsubscribeSentReq) unsubscribeSentReq();
+      if (unsubscribeReceivedReq) unsubscribeReceivedReq();
+    };
   }, [userId, user, navigate]);
 
   if (loading) {
