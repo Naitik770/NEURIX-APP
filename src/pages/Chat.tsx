@@ -62,9 +62,6 @@ export default function Chat() {
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date() 
       })));
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
     }, (error) => handleFirestoreError(error, OperationType.LIST, `chats/${chatId}/messages`));
 
     return () => unsubscribe();
@@ -76,6 +73,13 @@ export default function Chat() {
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
   }, []);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -255,9 +259,9 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#FDFBF7] dark:bg-gray-900 overflow-hidden relative">
+    <div className="flex flex-col h-full bg-[#FDFBF7] dark:bg-gray-900 overflow-hidden relative">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-700 z-20">
+      <header className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-700 z-30">
         <div className="flex items-center gap-2">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -636,7 +640,7 @@ export default function Chat() {
       </AnimatePresence>
 
       {/* Input Area */}
-      <div className="p-2 bg-transparent z-20">
+      <div className="flex-shrink-0 p-4 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-20">
         {editingMessage ? (
           <form onSubmit={handleEditMessage} className="flex flex-col gap-2 max-w-4xl mx-auto bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between px-2">
