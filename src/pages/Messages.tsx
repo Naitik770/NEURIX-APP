@@ -12,6 +12,7 @@ export default function Messages() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'add'>('friends');
   const [friends, setFriends] = useState<any[]>([]);
+  const [nicknames, setNicknames] = useState<{ [key: string]: string }>({});
   const [friendsSearchQuery, setFriendsSearchQuery] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,6 +59,25 @@ export default function Messages() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/friendRequests`));
     return () => unsubscribe();
   }, [user]);
+
+  // Fetch nicknames for friends
+  useEffect(() => {
+    if (!user || friends.length === 0) return;
+
+    const unsubscribes = friends.map(friend => {
+      const chatId = [user.uid, friend.id].sort().join('_');
+      return onSnapshot(doc(db, 'chats', chatId), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.nicknames && data.nicknames[friend.id]) {
+            setNicknames(prev => ({ ...prev, [friend.id]: data.nicknames[friend.id] }));
+          }
+        }
+      });
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [user, friends]);
 
   // Incremental Search
   useEffect(() => {
@@ -286,7 +306,9 @@ export default function Messages() {
                         <img src={getAvatarUrl(friend)} alt="Avatar" className="w-full h-full object-cover" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-orange-500 transition-colors">{friend.name}</h3>
+                        <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-orange-500 transition-colors">
+                          {nicknames[friend.id] || friend.name}
+                        </h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">@{friend.username}</p>
                       </div>
                     </div>
