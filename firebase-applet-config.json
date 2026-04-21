@@ -1,9 +1,8 @@
 {
-    apiKey: "AIzaSyAfwok76zipSYKTkxUuEAjj-JQU3Y4ycz8",
-    authDomain: "neurix-auth.firebaseapp.com",
-    projectId: "neurix-auth",
-    storageBucket: "neurix-auth.firebasestorage.app",
-    messagingSenderId: "497399782260",
-    appId: "1:497399782260:web:aba17ccaaa94027517aa21",
-    measurementId: "G-EDEH85E3VF"
-  }
+    "apiKey": "AIzaSyAfwok76zipSYKTkxUuEAjj-JQU3Y4ycz8",
+    "authDomain": "neurix-auth.firebaseapp.com",
+    "projectId": "neurix-auth",
+    "storageBucket": "neurix-auth.firebasestorage.app",
+    "messagingSenderId": "497399782260",
+    "appId": "1:497399782260:web:aba17ccaaa94027517aa21"
+}
