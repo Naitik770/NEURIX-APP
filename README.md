@@ -1,20 +1,215 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+<h1>NEURIX App</h1>
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/c2181576-c8e8-4e60-be71-05839b15bbd1
-
-## Run Locally
-
-**Prerequisites:**  Node.js
+NEURIX is a modern AI-powered application designed to deliver intelligent interactions using advanced models and real-time cloud infrastructure. It integrates Gemini AI and Firebase to provide a fast, scalable, and seamless user experience.
 
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+
+**🚀 Features**
+
+⚡ AI-powered responses using Gemini API
+
+🔥 Real-time database with Firebase Firestore
+
+🌐 Fast frontend powered by Vite
+
+🔐 Secure environment configuration
+
+🧩 Modular and scalable architecture
+
+
+
+---
+
+**📦 Installation**
+
+Clone the repository:
+
+git clone https://github.com/your-username/neurix.git
+cd neurix
+
+Install dependencies:
+
+npm install
+
+
+---
+
+**⚙️ Environment Setup**
+
+🧪 Local Development
+
+Create a .env file in your root directory:
+
+GEMINI_API_KEY=YOUR_KEY <br>
+VITE_GEMINI_API_KEY=SAME_KEY_HERE_ALSO
+
+> ⚠️ Important: These variables are only for local development.
+❌ Do NOT upload your .env file to GitHub.
+
+
+
+
+---
+
+**🚀 Production Setup (Very Important 🔐)**
+
+When deploying your app (Vercel, Netlify, etc.), DO NOT rely on .env file.
+
+Instead, set environment variables directly in your deployment platform:
+
+Steps:
+
+1. Go to your hosting dashboard
+
+
+2. Open Project Settings → Environment Variables
+
+
+3. Add the following:
+
+
+
+GEMINI_API_KEY=YOUR_KEY
+VITE_GEMINI_API_KEY=SAME_KEY_HERE_ALSO
+
+> ✅ This keeps your API key secure and prevents exposure in your code.
+
+
+
+
+---
+
+**🤖 Gemini API Setup**
+
+1. Go to your Gemini API provider dashboard
+
+
+2. Generate your API key
+
+
+3. Add it to:
+
+.env file (for local)
+
+Hosting environment variables (for production)
+
+
+
+
+
+---
+
+**🔥 Firebase Setup (Optional but Recommended)**
+
+If you want to use your own Firebase project:
+
+Step 1: Create Firebase Project
+
+Go to Firebase Console
+
+Click Create Project
+
+Add a Web App
+
+
+
+---
+
+Step 2: Enable Testing Mode
+
+While setting up Firestore, select Testing Mode
+
+
+
+---
+
+Step 3: Get Firebase Credentials
+
+After creating the web app, Firebase will provide config credentials
+
+Copy those credentials
+
+
+
+---
+
+Step 4: Configure Project
+
+Open firebase_applet.json
+
+Paste your Firebase credentials into this file
+
+
+
+---
+
+**🗄️ Firestore Setup**
+
+1. Go to Firestore Database
+
+
+2. Click Create Database
+
+
+3. Select your preferred region
+
+
+4. After setup:
+
+Open firestore.rules file in your project
+
+Copy its contents
+
+Paste into Firebase → Firestore → Rules Tab
+
+
+
+
+
+---
+
+**▶️ Running the App**
+
+Start development server:
+
+npm run dev
+
+Build for production:
+
+npm run build
+
+Preview production build:
+
+npm run preview
+
+
+---
+
+**🛠️ Tech Stack**
+
+Frontend: Typescript 
+
+AI: Gemini API
+
+Backend/Database: Firebase Firestore
+
+
+
+---
+
+**🔐 Security Best Practices**
+
+❌ Never hardcode API keys
+
+❌ Never commit .env file
+
+✅ Always use environment variables in production
+
+🔁 Rotate API keys if exposed
+
+---
+
+**📄 License**
+
+This project is licensed under the MIT License.
