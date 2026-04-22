@@ -135,7 +135,7 @@ Copy those credentials
 
 Step 4: Configure Project
 
-Open firebase_applet.json
+Open firebase-applet-config.json
 
 Paste your Firebase credentials into this file
 
