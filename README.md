@@ -1,6 +1,6 @@
 <h1>NEURIX App</h1>
 
-NEURIX is a modern AI-powered application designed to deliver intelligent interactions using advanced models and real-time cloud infrastructure. It integrates Gemini AI and Firebase to provide a fast, scalable, and seamless user experience.
+NEURIX is a habit builder and mind training app 
 
 
 ---
@@ -25,8 +25,7 @@ NEURIX is a modern AI-powered application designed to deliver intelligent intera
 
 Clone the repository:
 
-git clone https://github.com/your-username/neurix.git
-cd neurix
+https://github.com/Naitik770/NEURIX-APP.git
 
 Install dependencies:
 
@@ -70,7 +69,7 @@ Steps:
 
 
 
-GEMINI_API_KEY=YOUR_KEY
+GEMINI_API_KEY=YOUR_KEY <br>
 VITE_GEMINI_API_KEY=SAME_KEY_HERE_ALSO
 
 > ✅ This keeps your API key secure and prevents exposure in your code.
