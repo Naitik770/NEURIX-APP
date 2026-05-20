@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <url>
+    <loc>https://neurixapp.netlify.app/</loc>
+  </url>
+
+  <url>
+    <loc>https://neurixapp.netlify.app/coach</loc>
+  </url>
+
+  <url>
+    <loc>https://neurixapp.netlify.app/games</loc>
+  </url>
+
+  <url>
+    <loc>https://neurixapp.netlify.app/profile</loc>
+  </url>
+
+</urlset>
