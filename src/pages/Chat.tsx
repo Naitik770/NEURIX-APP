@@ -499,101 +499,113 @@ export default function Chat() {
         )}  
       </AnimatePresence>  
 
-      {/* Reply/Attachment Banner */}  
-      <AnimatePresence>  
-        {(attachment || replyingTo) && (  
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-[95px] left-1/2 -translate-x-1/2 w-[calc(100%-48px)] max-w-2xl bg-white/95 dark:bg-gray-800/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[45] flex items-center gap-3">  
-             <div className="flex-1 min-w-0 px-1">  
-               <p className="text-[10px] font-bold text-orange-500 mb-0.5 uppercase tracking-wider">{attachment ? 'Attachment' : `Reply to ${replyingTo.senderName}`}</p>  
-               <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{attachment ? attachment.name : replyingTo.text}</p>  
-             </div>  
-             <button onClick={() => {setAttachment(null); setReplyingTo(null)}} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full transition-transform active:scale-90"><X className="w-4 h-4 text-gray-500"/></button>  
-          </motion.div>  
-        )}  
-      </AnimatePresence>
+           {/* Reply/Attachment Banner & Input Container */}
+      <div className="flex-shrink-0 w-full max-w-2xl mx-auto px-4 pb-6 bg-[#FDFBF7] dark:bg-gray-900 z-40 relative">
+        
+        {/* Reply/Attachment Banner (Now relative to the input container area) */}
+        <AnimatePresence>
+          {(attachment || replyingTo) && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: 10 }} 
+              className="absolute -top-16 left-4 right-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[45] flex items-center gap-3"
+            >
+              <div className="flex-1 min-w-0 px-1">
+                <p className="text-[10px] font-bold text-orange-500 mb-0.5 uppercase tracking-wider">
+                  {attachment ? 'Attachment' : `Reply to ${replyingTo.senderName}`}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 truncate">
+                  {attachment ? attachment.name : replyingTo.text}
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => { setAttachment(null); setReplyingTo(null); }} 
+                className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full transition-transform active:scale-90"
+              >
+                <X className="w-4 h-4 text-gray-500"/>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/* Input Area - PERFECTLY CENTERED */}
-      <div className="absolute bottom-0 w-full left-0 right-0 z-40 pointer-events-none">
-        {/* Subtle Blur Background - Spans full width */}
-        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent dark:from-gray-900 dark:via-gray-900/80 dark:to-transparent pointer-events-none" />
+        {/* Input Interface */}
+        {editingMessage ? (
+          <motion.form 
+            initial={{ y: 20, opacity: 0 }} 
+            animate={{ y: 0, opacity: 1 }} 
+            onSubmit={handleEditMessage} 
+            className="flex flex-col gap-2 w-full bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700"
+          >
+            <div className="flex items-center justify-between px-2">
+              <span className="text-[10px] font-bold text-orange-500 flex items-center gap-1 uppercase tracking-wider">
+                <Edit2 className="w-3 h-3"/> Editing Message
+              </span>
+              <button type="button" onClick={() => { setEditingMessage(null); setEditMessageText(''); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4"/>
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="text" 
+                value={editMessageText} 
+                onChange={(e) => setEditMessageText(e.target.value)} 
+                className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-2.5 outline-none text-[14px] dark:text-white" 
+                autoFocus 
+              />
+              <button type="submit" className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center text-white shadow-md active:scale-95 transition-transform">
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.form>
+        ) : (
+          <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full relative">
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" />
+            
+            <div className="flex-1 flex items-center bg-white dark:bg-gray-800 rounded-full pl-2 pr-1.5 py-1.5 shadow-2xl border border-gray-100 dark:border-gray-700 transition-all focus-within:border-orange-500/50">
+              <button 
+                type="button" 
+                onClick={() => fileInputRef.current?.click()} 
+                className="p-2 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
 
-        {/* Input Container - Constrained and Centered */}  
-        <div className="relative w-full max-w-2xl mx-auto px-4 pb-6 pointer-events-auto">  
-          {editingMessage ? (  
-            <motion.form   
-              initial={{ y: 20, opacity: 0 }}   
-              animate={{ y: 0, opacity: 1 }}  
-              onSubmit={handleEditMessage}   
-              className="flex flex-col gap-2 w-full bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700"  
-            >  
-              <div className="flex items-center justify-between px-2">  
-                <span className="text-[10px] font-bold text-orange-500 flex items-center gap-1 uppercase tracking-wider">  
-                  <Edit2 className="w-3 h-3"/> Editing Message  
-                </span>  
-                <button type="button" onClick={() => { setEditingMessage(null); setEditMessageText(''); }} className="text-gray-400 hover:text-gray-600">  
-                  <X className="w-4 h-4"/>  
-                </button>  
-              </div>  
-              <div className="flex items-center gap-2">  
-                <input   
-                  type="text"   
-                  value={editMessageText}   
-                  onChange={(e) => setEditMessageText(e.target.value)}  
-                  className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-2.5 outline-none text-[14px] dark:text-white"  
-                  autoFocus   
-                />  
-                <button type="submit" className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center text-white shadow-md active:scale-95 transition-transform">  
-                  <Check className="w-4 h-4" />  
-                </button>  
-              </div>  
-            </motion.form>  
-          ) : (  
-            <form onSubmit={handleSendMessage} className="flex items-center gap-2 w-full">  
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" />  
-                
-              <div className="flex-1 flex items-center bg-white dark:bg-gray-800 rounded-full pl-2 pr-1.5 py-1.5 shadow-2xl border border-gray-100 dark:border-gray-700 transition-all focus-within:border-orange-500/50">  
-                <button   
-                  type="button"   
-                  onClick={() => fileInputRef.current?.click()}   
-                  className="p-2 text-gray-400 hover:text-orange-500 transition-colors shrink-0"  
-                >  
-                  <Paperclip className="w-5 h-5" />  
-                </button>  
+              <input 
+                type="text" 
+                value={newMessage} 
+                onChange={(e) => setNewMessage(e.target.value)} 
+                placeholder="Message..." 
+                className="flex-1 bg-transparent border-none px-2 py-1 outline-none text-[15px] text-gray-900 dark:text-white placeholder:text-gray-400 min-w-0" 
+              />
 
-                <input   
-                  type="text"   
-                  value={newMessage}   
-                  onChange={(e) => setNewMessage(e.target.value)}   
-                  placeholder="Message..."  
-                  className="flex-1 bg-transparent border-none px-2 py-1 outline-none text-[15px] text-gray-900 dark:text-white placeholder:text-gray-400 min-w-0"   
-                />  
+              <div className="flex items-center gap-0.5">
+                <button 
+                  type="button" 
+                  onClick={startListening} 
+                  className={`p-2 transition-colors shrink-0 ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-400 hover:text-orange-500'}`}
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
 
-                <div className="flex items-center gap-0.5">  
-                  <button   
-                    type="button"   
-                    onClick={startListening}   
-                    className={`p-2 transition-colors shrink-0 ${isListening ? 'text-orange-500 animate-pulse' : 'text-gray-400 hover:text-orange-500'}`}  
-                  >  
-                    <Mic className="w-5 h-5" />  
-                  </button>  
+                <button 
+                  type="submit" 
+                  disabled={!newMessage.trim() && !attachment} 
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
+                    (newMessage.trim() || attachment) 
+                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 scale-100 active:scale-90' 
+                      : 'bg-transparent text-gray-300 pointer-events-none'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
 
-                  <button   
-                    type="submit"   
-                    disabled={!newMessage.trim() && !attachment}   
-                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${  
-                      (newMessage.trim() || attachment)   
-                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 scale-100 active:scale-90'   
-                        : 'bg-transparent text-gray-300 pointer-events-none'  
-                    }`}  
-                  >  
-                    <Send className="w-4 h-4" />  
-                  </button>  
-                </div>  
-              </div>  
-            </form>  
-          )}  
-        </div>  
-      </div>  
 
       {/* Nickname Modal */}  
       <AnimatePresence>  
